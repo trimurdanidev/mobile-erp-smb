@@ -1,0 +1,7 @@
+{
+  "name": "mobile-erp-smb",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "vue-vite"
+}
