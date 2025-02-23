@@ -17,11 +17,14 @@
     "@capacitor/haptics": "7.0.0",
     "@capacitor/keyboard": "7.0.0",
     "@capacitor/status-bar": "7.0.0",
-    "@ionic/vue": "^8.0.0",
+    "@ionic/vue": "^8.4.3",
     "@ionic/vue-router": "^8.0.0",
+    "axios": "^1.7.9",
     "ionicons": "^7.0.0",
+    "vee-validate": "^4.15.0",
     "vue": "^3.3.0",
-    "vue-router": "^4.2.0"
+    "vue-router": "^4.2.0",
+    "yup": "^1.6.1"
   },
   "devDependencies": {
     "@capacitor/cli": "7.0.1",
@@ -31,7 +34,7 @@
     "@vue/test-utils": "^2.3.0",
     "cypress": "^13.5.0",
     "eslint": "^8.35.0",
-    "eslint-plugin-vue": "^9.9.0",
+    "eslint-plugin-vue": "^9.32.0",
     "jsdom": "^22.1.0",
     "terser": "^5.4.0",
     "typescript": "~5.6.2",

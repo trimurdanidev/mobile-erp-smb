@@ -1,34 +1,61 @@
 import { createRouter, createWebHistory } from '@ionic/vue-router';
 import { RouteRecordRaw } from 'vue-router';
-import TabsPage from '../views/TabsPage.vue'
+import Login from '../views/Login.vue';
+import Home from '../views/Home.vue';
+import AbsenMasuk from '../views/AbsenMasuk.vue';
+import AbsenPulang from '../views/AbsenPulang.vue';
+import RekapAbsen from '../views/RekapAbsensi.vue';
+import TabsPage from '../views/TabsPage.vue';
+
 
 const routes: Array<RouteRecordRaw> = [
   {
     path: '/',
-    redirect: '/tabs/tab1'
+    redirect: '/tabs'
+    // redirect: '/TabsPage'
   },
   {
-    path: '/tabs/',
+    path: '/home',
+    component: Home
+  },
+  {
+    path: '/login',
+    component: Login
+  },
+  {
+    path: '/in',
+    component: AbsenMasuk
+  },
+  {
+    path: '/out',
+    component: AbsenPulang
+  },
+  {
+    path: '/rekap',
+    component: RekapAbsen
+  },
+  {
+    path: '/',
     component: TabsPage,
     children: [
       {
-        path: '',
-        redirect: '/tabs/tab1'
+        path: '/',
+        redirect: '/tabs/home'
       },
       {
-        path: 'tab1',
-        component: () => import('@/views/Tab1Page.vue')
+        path: '/home',
+        component: () => import('../views/Home.vue')
       },
       {
-        path: 'tab2',
-        component: () => import('@/views/Tab2Page.vue')
+        path: '/profile',
+        component: () => import('../views/Profile.vue')
       },
       {
-        path: 'tab3',
-        component: () => import('@/views/Tab3Page.vue')
+        path: '/logout',
+        component: () => import('../views/Login.vue')
       }
     ]
-  }
+  },
 ]
 
 const router = createRouter({
