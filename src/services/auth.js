@@ -1,4 +1,7 @@
 import api from "./axiosInstance";
+import { ref } from "vue";
+const getUser = localStorage.getItem("master_user");
+const userData = ref([]);
 
 export function isAuthenticated() {
   const tokens = localStorage.getItem("access_tokens");
@@ -27,7 +30,8 @@ export const logout = async () => {
 // Fungsi untuk mengecek token valid atau tidak
 export const checkToken = async () => {
   try {
-    const response = await api.get("/showById/"+id); // Contoh API untuk cek user
+    userData.value = JSON.parse(getUser);
+    const response = await api.get("/showById/"+userData.value.id); // Contoh API untuk cek user
     return response.data;
   } catch (error) {
     console.error("Token tidak valid atau expired");

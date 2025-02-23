@@ -63,6 +63,7 @@ import { showToast } from "@/services/toastHandlers";
 import HomeHeader from "../views/HomeHeader.vue";
 import TabsPage from "../views/TabsPage.vue";
 import handleRefresh from "../views/HomeHeader.vue";
+import { checkToken } from "@/services/auth";
 
 export default {
   components: {
@@ -112,6 +113,7 @@ export default {
     onMounted(() => {
     //   getHariTanggal();
     //   loadAbsensi();
+    checkToken();
     });
 
     return {

@@ -98,15 +98,15 @@ export default {
         // if (getUser) {
         userData.value = JSON.parse(getUser); // Parsing JSON ke objek
         const response = api.get(
-          "/getAbsenUser/" + userData.value.user + "/" + "2024-02-22"
-          // "/getAbsenUser/" + userData.value.user + "/" + Tanggal.value
+          // "/getAbsenUser/" + userData.value.user + "/" + "2024-02-22"
+          "/getAbsenUser/" + userData.value.user + "/" + Tanggal.value
         );
         const parsedAbsenMasuk = (await response).data;
         seterAbsenmasuk.value = JSON.stringify(parsedAbsenMasuk.data);
         dd.value  = JSON.parse(seterAbsenmasuk.value);
         absenMasuk.value  = dd.value.time_in;
 
-        showToast(absenMasuk.value, "success");
+        // showToast(absenMasuk.value, "success");
       } catch (error) {
         console.error("Gagal memuat data absensi:", error);
       }

@@ -33,6 +33,13 @@ import '@ionic/vue/css/palettes/dark.system.css';
 
 /* Theme variables */
 import './theme/variables.css';
+import api from './services/axiosInstance';
+
+const token = localStorage.getItem("access_token");
+
+if(token){
+  api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+}
 
 const app = createApp(App)
   .use(IonicVue)
