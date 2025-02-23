@@ -2,13 +2,14 @@
   <div class="home-header">
     <ion-card class="absen-card">
       <ion-card-header>
-        <ion-card-title>Selamat datang di Aplikasi ERP SMB</ion-card-title>
+        
+        <ion-card-title><h2>{{showuser}}</h2>Welcome To ERP SMB</ion-card-title>
         <ion-card-subtitle
           >{{ hariIni }}, {{ tanggalHariIni }}</ion-card-subtitle
         >
       </ion-card-header>
       <ion-card-content>
-        <p v-if="absenMasuk">
+        <p v-if="seterAbsenmasuk">
           ✅ Anda telah absen masuk pukul {{ absenMasuk }}.
         </p>
         <p v-else>❌ Anda belum absen masuk.</p>
@@ -55,6 +56,11 @@ export default {
     const absenMasuk = ref(null); // Simpan jam absen masuk
     const Tanggal = ref("");
     const getUser = localStorage.getItem("master_user");
+    const showuser = ref(null);
+    const timeIn = ref(null);
+    const timeOut = ref(null);
+    const seterAbsenmasuk = ref(null);
+    const dd = ref(null);
 
     // Fungsi untuk mendapatkan hari dan tanggal
     const getHariTanggal = () => {
@@ -92,12 +98,15 @@ export default {
         // if (getUser) {
         userData.value = JSON.parse(getUser); // Parsing JSON ke objek
         const response = api.get(
-        //   "/getAbsenUser/" + userData.value.user + "/" + "2024-02-22"
-          "/getAbsenUser/" + userData.value.user + "/" + Tanggal.value
+          "/getAbsenUser/" + userData.value.user + "/" + "2024-02-22"
+          // "/getAbsenUser/" + userData.value.user + "/" + Tanggal.value
         );
-        absenMasuk.value = JSON.stringify(response.data);
-        // }
-        // showToast(absenMasuk.value, "success");
+        const parsedAbsenMasuk = (await response).data;
+        seterAbsenmasuk.value = JSON.stringify(parsedAbsenMasuk.data);
+        dd.value  = JSON.parse(seterAbsenmasuk.value);
+        absenMasuk.value  = dd.value.time_in;
+
+        showToast(absenMasuk.value, "success");
       } catch (error) {
         console.error("Gagal memuat data absensi:", error);
       }
@@ -111,6 +120,9 @@ export default {
     onMounted(() => {
       getHariTanggal();
       loadAbsensi();
+      const parseUser = JSON.parse(getUser);
+      showuser.value = parseUser.description;
+      // showToast(parseUser.description,'success');
     });
 
     return {
@@ -124,6 +136,12 @@ export default {
       Tanggal,
       userData,
       getUser,
+      showuser,
+      timeIn,
+      timeOut,
+      seterAbsenmasuk,
+      dd,
+      absenMasuk,
     };
 
 

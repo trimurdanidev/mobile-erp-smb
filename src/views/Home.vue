@@ -10,7 +10,7 @@
         <ion-button
           expand="block"
           class="menu-button"
-          @click="goTo('absen-masuk')"
+          @click="goTo('in')"
         >
           <ion-icon :icon="logInOutline" slot="start"></ion-icon>
           Absen Masuk
@@ -20,7 +20,7 @@
           expand="block"
           class="menu-button"
           color="danger"
-          @click="goTo('absen-pulang')"
+          @click="goTo('out')"
         >
           <ion-icon :icon="logOutOutline" slot="start"></ion-icon>
           Absen Pulang
@@ -102,22 +102,7 @@ export default {
       }
     };
 
- const logout = async () => {
-    try {
-    // Panggil API Logout
-    await api.post("/logout");
-
-    // Hapus token & data user dari localStorage
-    localStorage.removeItem("access_token");
-    localStorage.removeItem("master_user");
-    localStorage.clear();
-
-    // Redirect ke halaman login
-    router.replace("/login");
-    } catch (error) {
-        console.error("Logout gagal:", error);
-        showToast(error.message, 'danger');
-    }
+ 
 
     const handleRefresh = async (event) => {
       await loadAbsensi(); // Memuat data baru
@@ -136,8 +121,8 @@ export default {
       documentTextOutline,
       userData,
       handleRefresh,
+      TabsPage,
     };
-  }
   }
 };
 </script>
