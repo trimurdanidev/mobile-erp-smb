@@ -35,6 +35,7 @@ export const checkToken = async () => {
     return response.data;
   } catch (error) {
     console.error("Token tidak valid atau expired");
+    showToast("Sesi Login Berakhir !", "danger");
     logout(); // Jika token expired, logout otomatis
   }
 };

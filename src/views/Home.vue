@@ -11,6 +11,7 @@
           expand="block"
           class="menu-button"
           @click="goTo('in')"
+          :disabled="disableButtonMasuk"
         >
           <ion-icon :icon="logInOutline" slot="start"></ion-icon>
           Absen Masuk
@@ -21,6 +22,7 @@
           class="menu-button"
           color="danger"
           @click="goTo('out')"
+          :disabled="disableButtonPulang"
         >
           <ion-icon :icon="logOutOutline" slot="start"></ion-icon>
           Absen Pulang
@@ -30,14 +32,13 @@
           expand="block"
           class="menu-button"
           color="medium"
-          @click="goTo('rekap-absen')"
+          @click="goTo('rekap')"
         >
           <ion-icon :icon="documentTextOutline" slot="start"></ion-icon>
           Rekap Absensi
         </ion-button>
       </div>
     </ion-content>
-    <TabsPage />
   </ion-page>
 </template>
   
@@ -82,6 +83,19 @@ export default {
     const router = useRouter();
     const absenMasuk = ref(null);
     const userData = ref([]);
+    const getUser = localStorage.getItem("master_user");
+    const Tanggal = ref("");
+    const today = new Date();
+    const ff = ref(null);
+    const disableButtonPulang = ref(true);
+    const disableButtonMasuk = ref(false);
+
+    Tanggal.value =
+      today.getFullYear() +
+      "-" +
+      String(today.getMonth() + 1).padStart(2, "0") +
+      "-" +
+      today.getDate();
 
     const goTo = (menu) => {
       router.push(`/${menu}`);
@@ -92,18 +106,20 @@ export default {
         // if (getUser) {
         userData.value = JSON.parse(getUser); // Parsing JSON ke objek
         const response = api.get(
-        //   "/getAbsenUser/" + userData.value.user + "/" + "2024-02-22"
+          //   "/getAbsenUser/" + userData.value.user + "/" + "2024-02-22"
           "/getAbsenUser/" + userData.value.user + "/" + Tanggal.value
         );
-        absenMasuk.value = JSON.stringify(response.data);
-        // }
+        const parsedAbsenMasuk = (await response).data;
+        absenMasuk.value = JSON.stringify(parsedAbsenMasuk.data);
+        ff.value = JSON.parse(absenMasuk.value);
+        // showToast(ff.user,'success');
+
       } catch (error) {
         console.error("Gagal memuat data absensi:", error);
-        showToast(error.message ,'danger');
+        // showToast(error.response.data.message, "danger");
+        // disableButtonPulang.value = true;
       }
     };
-
- 
 
     const handleRefresh = async (event) => {
       await loadAbsensi(); // Memuat data baru
@@ -111,9 +127,16 @@ export default {
     };
 
     onMounted(() => {
-    //   getHariTanggal();
-    //   loadAbsensi();
-    checkToken();
+      //   getHariTanggal();
+      loadAbsensi();
+      checkToken();
+      
+      if(!ff.value){
+        disableButtonPulang.value = false;
+      }else{
+        disableButtonMasuk.value = true;
+      }
+
     });
 
     return {
@@ -124,8 +147,12 @@ export default {
       userData,
       handleRefresh,
       TabsPage,
+      Tanggal,
+      disableButtonPulang,
+      disableButtonMasuk,
+      // IonRefresher
     };
-  }
+  },
 };
 </script>
   

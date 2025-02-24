@@ -96,7 +96,7 @@ export default {
     const loadAbsensi = async () => {
       try {
         // if (getUser) {
-        userData.value = JSON.parse(getUser); // Parsing JSON ke objek
+        userData.value = JSON.parse(getUser); 
         const response = api.get(
           // "/getAbsenUser/" + userData.value.user + "/" + "2024-02-22"
           "/getAbsenUser/" + userData.value.user + "/" + Tanggal.value

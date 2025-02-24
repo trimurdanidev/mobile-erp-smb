@@ -122,13 +122,12 @@ export default {
         const masterUser = response.data.master_user;
 
         localStorage.setItem("master_user", JSON.stringify(masterUser));
-        
+        router.push('/');
         //clearForm
         username.value = "";
         password.value = "";
 
-        router.push("/home"); // Redirect ke halaman utama
-
+        // router.push("/"); // Redirect ke halaman utama
       } catch (error) {
         showToast(error.response.data.error, "danger");
       } finally {

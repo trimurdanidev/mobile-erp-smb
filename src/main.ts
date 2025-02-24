@@ -36,6 +36,14 @@ import './theme/variables.css';
 import api from './services/axiosInstance';
 
 const token = localStorage.getItem("access_token");
+//router.beforeEach((to, from, next) => {
+
+//   if (!token && to.path !== "/login") {
+//     next({ name: "login" }); // nama route benar
+//   } else {
+//     next();
+//   }
+// });
 
 if(token){
   api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
