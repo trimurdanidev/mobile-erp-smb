@@ -2,10 +2,6 @@
   <ion-page>
     <HomeHeader />
     <ion-content class="ion-padding" :fullscreen="true">
-      <ion-refresher slot="fixed" @ionRefresh="handleRefresh">
-        <ion-refresher-content></ion-refresher-content>
-      </ion-refresher>
-
       <div class="menu-container">
         <ion-button
           expand="block"
@@ -38,6 +34,9 @@
           Rekap Absensi
         </ion-button>
       </div>
+      <ion-refresher slot="fixed" @ionRefresh="handleRefresh">
+        <ion-refresher-content />
+      </ion-refresher>
     </ion-content>
   </ion-page>
 </template>
@@ -52,6 +51,8 @@ import {
   IonContent,
   IonButton,
   IonIcon,
+  IonRefresher,
+  IonRefresherContent,
 } from "@ionic/vue";
 import {
   logInOutline,
@@ -78,6 +79,8 @@ export default {
     HomeHeader,
     TabsPage,
     handleRefresh,
+    IonRefresher,
+    IonRefresherContent,
   },
   setup() {
     const router = useRouter();
@@ -113,7 +116,6 @@ export default {
         absenMasuk.value = JSON.stringify(parsedAbsenMasuk.data);
         ff.value = JSON.parse(absenMasuk.value);
         // showToast(ff.user,'success');
-
       } catch (error) {
         console.error("Gagal memuat data absensi:", error);
         // showToast(error.response.data.message, "danger");
@@ -122,21 +124,27 @@ export default {
     };
 
     const handleRefresh = async (event) => {
-      await loadAbsensi(); // Memuat data baru
-      event.target.complete(); // Menghentikan refresher
+      console.log("Memuat ulang data...");
+
+      // Simulasi load data baru
+      setTimeout(() => {
+        loadAbsensi();
+        console.log("Data diperbarui!");
+        event.target.complete(); // Hentikan loading
+      }, 2000);
     };
 
     onMounted(() => {
       //   getHariTanggal();
       loadAbsensi();
       checkToken();
-      
-      if(!ff.value){
+      handleRefresh();
+
+      if (!ff.value) {
         disableButtonPulang.value = false;
-      }else{
+      } else {
         disableButtonMasuk.value = true;
       }
-
     });
 
     return {

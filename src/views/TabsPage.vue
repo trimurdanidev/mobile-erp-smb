@@ -68,6 +68,7 @@ import router from "@/router";
 import { ref, onMounted } from "vue";
 
 const isAlertOpen = ref(false);
+const getUser = localStorage.getItem("master_user");
 
 const logout = async () => {
   try {

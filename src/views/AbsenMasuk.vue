@@ -72,8 +72,8 @@ const dateAbsen = ref("");
 const absenTime = ref(null);
 const latitude = ref(null);
 const longitude = ref(null);
-const keterangan = ref("");
-const selfieTaken = ref(false);
+const keterangan = ref(null);
+const selfieTaken = ref(null);
 const videoElement = ref(null);
 const canvasElement = ref(null);
 const selfieImage = ref(null);
@@ -85,6 +85,8 @@ const printRes = ref(null);
 const printRes2 = ref(null);
 const dataPosition = ref(null);
 const prinLok = ref(null);
+const fileName = ref(null);
+const imageBase64 =ref(null);
 
 // 📌 1. Ambil Waktu & Tanggal Saat Ini
 const getCurrentDateTime = () => {
@@ -172,8 +174,13 @@ const takeSelfie = () => {
   canvas.height = video.videoHeight;
   context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-  selfieImage.value = canvas.toDataURL("image/png");
-  selfieTaken.value = true;
+  selfieImage.value = canvas.toDataURL("image/jpg");
+  selfieTaken.value = "data:image/jpeg;base64," +selfieImage.value;
+
+  // this.imagePreview = "data:image/jpeg;base64," + this.imageBase64; // Untuk preview
+
+      console.log("✅ Base64 String:", this.selfieImage.substring(0, 50) + "..."); // Cek sebagian
+  
 };
 
 const dataURItoBlob = (dataURI) => {
@@ -198,23 +205,23 @@ const submitAbsen = async () => {
     const token = localStorage.getItem("access_token");
     const absenData = new FormData();
     const timestamp = new Date().getTime(); // Ambil waktu sekarang
-    const fileName = `IN_photo.png`; // Nama file unik
+    fileName.value = `IN_${userData.value.user}_${timestamp}.png`; // Nama file unik
 
     absenData.append("user_id", userData.value.user);
     absenData.append("date", dateNow());
     absenData.append("time_in", time()),
       absenData.append("latitude_in", latitude.value);
     absenData.append("longitude_in", longitude.value);
-    absenData.append("keterangan", keterangan.value);
+    absenData.append("absensi_ref", keterangan.value);
     const blob = dataURItoBlob(selfieImage.value);
 
-    if (!blob || blob.size === 0) {
+    if (blob.size === 0) {
       //   console.error("File gambar tidak valid!");
       showToast("File gambar tidak valid!", "danger");
       return;
     }
 
-    absenData.append("images_in", blob, fileName);
+    absenData.append("images_in", blob, fileName.value);
 
     const response = api.post("/addAbsen", absenData, {
       headers: {
