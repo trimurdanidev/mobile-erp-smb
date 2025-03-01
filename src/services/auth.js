@@ -12,10 +12,10 @@ export function isAuthenticated() {
 export const logout = async () => {
   try {
     router.replace("/login");
-    showToast("Sesi Login Berakhir !", "danger");
+    await showToast("Sesi Login Berakhir !", "danger");
   } catch (error) {
     console.error("Logout gagal:", error);
-    showToast("Logout Gagal", "danger");
+    await showToast("Logout Gagal", "danger");
   } finally {
     // Hapus data dari localStorage
     localStorage.removeItem("access_token");
@@ -35,7 +35,7 @@ export const checkToken = async () => {
     return response.data;
   } catch (error) {
     console.error("Token tidak valid atau expired");
-    showToast("Sesi Login Berakhir !", "danger");
+    await showToast("Sesi Login Berakhir !", "danger");
     logout(); // Jika token expired, logout otomatis
   }
 };

@@ -115,10 +115,10 @@ export default {
         const parsedAbsenMasuk = (await response).data;
         absenMasuk.value = JSON.stringify(parsedAbsenMasuk.data);
         ff.value = JSON.parse(absenMasuk.value);
-        // showToast(ff.user,'success');
+        // await showToast(ff.user,'success');
       } catch (error) {
         console.error("Gagal memuat data absensi:", error);
-        // showToast(error.response.data.message, "danger");
+        // await showToast(error.response.data.message, "danger");
         // disableButtonPulang.value = true;
       }
     };
@@ -140,10 +140,10 @@ export default {
       checkToken();
       handleRefresh();
 
-      if (!ff.value) {
-        disableButtonPulang.value = false;
-      } else {
+      if (ff.value) {
         disableButtonMasuk.value = true;
+        // disableButtonPulang.value = false;
+      // } else {
       }
     });
 
@@ -175,7 +175,7 @@ export default {
   background-color: darkgray;
 }
 .home-header {
-  display: blofck;
+  display: block;
   flex-direction: column;
   gap: 0px;
   justify-content: center;

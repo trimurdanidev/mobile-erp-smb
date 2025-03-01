@@ -129,7 +129,7 @@
             );
             const data = await response.json();
             dataPosition.value = data.display_name;
-            //   showToast(dataPosition.value, "success");
+            //   await showToast(dataPosition.value, "success");
           },
           (error) => {
             console.error("Gagal mengambil lokasi:", error.message);
@@ -191,7 +191,7 @@
   
       if (!blob || blob.size === 0) {
         //   console.error("File gambar tidak valid!");
-        showToast("File gambar tidak valid!", "danger");
+        await showToast("File gambar tidak valid!", "danger");
         return;
       }
   
@@ -208,13 +208,13 @@
       const resultAbsen = (await response).data;
       printRes.value = JSON.stringify(resultAbsen);
       printRes2.value = JSON.parse(printRes.value);
-      showToast(printRes2.value.message, "success");
+      await showToast(printRes2.value.message, "success");
   
       router.push("/");
       // absenTime.value = response.data.time_in; // Perbarui UI dengan waktu absen
     } catch (error) {
       console.error("Gagal absen:", error.response?.data || error.message);
-      showToast(error.response.data.message, "danger");
+      await showToast(error.response.data.message, "danger");
       router.push("/");
     } finally {
       loading.value = false;

@@ -78,11 +78,11 @@ const logout = async () => {
     localStorage.clear();
 
     // Redirect ke halaman login
-    showToast('Logout Berhasil. Sampai Bertemu Lagi!','primary');
+    await showToast('Logout Berhasil. Sampai Bertemu Lagi!','primary');
     router.replace("/login");
   } catch (error) {
     console.error("Logout gagal:", error);
-    showToast("Terjadi Kesalahan Sistem", "danger");
+    await showToast("Terjadi Kesalahan Sistem", "danger");
   }
 };
 

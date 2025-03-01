@@ -106,7 +106,7 @@ export default {
         dd.value  = JSON.parse(seterAbsenmasuk.value);
         absenMasuk.value  = dd.value.time_in;
 
-        // showToast(absenMasuk.value, "success");
+        // await showToast(absenMasuk.value, "success");
       } catch (error) {
         console.error("Gagal memuat data absensi:", error);
       }
@@ -122,7 +122,7 @@ export default {
       loadAbsensi();
       const parseUser = JSON.parse(getUser);
       showuser.value = parseUser.description;
-      // showToast(parseUser.description,'success');
+      // await showToast(parseUser.description,'success');
     });
 
     return {
