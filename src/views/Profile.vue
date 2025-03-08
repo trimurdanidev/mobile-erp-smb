@@ -1,54 +1,58 @@
 <template>
   <ion-page>
     <!-- Header -->
-    <ion-header>
-      <ion-toolbar>
-        <ion-title>Profil Pengguna</ion-title>
-      </ion-toolbar>
-    </ion-header>
 
     <!-- Konten Profil -->
-    <ion-content>
-      <ion-refresher slot="fixed" @ionRefresh="refreshData">
-        <ion-refresher-content></ion-refresher-content>
-      </ion-refresher>
+    <ion-content color="full">
+      <div class="content-container">
+        <ion-header>
+          <ion-toolbar>
+            <ion-title>Profil Pengguna</ion-title>
+          </ion-toolbar>
+        </ion-header>
+        <ion-refresher slot="fixed" @ionRefresh="refreshData">
+          <ion-refresher-content></ion-refresher-content>
+        </ion-refresher>
 
-      <ion-card v-if="user">
-        <ion-card-header>
-          <ion-card-title class="ion-text-center"
-            >Halo, {{ user.name }} 👋</ion-card-title
-          >
-        </ion-card-header>
+        <ion-card v-if="user">
+          <ion-card-header>
+            <ion-card-title class="ion-text-center"
+              >Halo, {{ geterUser.data.user }} 👋</ion-card-title
+            >
+          </ion-card-header>
 
-        <ion-card-content class="ion-text-center">
-          <ion-avatar>
-            <img
-              v-if="user.profile_image"
-              :src="user.profile_image"
-              alt="Foto Profil"
-            />
-            <img
-              v-else
-              src="https://via.placeholder.com/150"
-              alt="Default Avatar"
-            />
-          </ion-avatar>
+          <ion-card-content class="ion-text-center">
+            <ion-avatar>
+              <img
+                v-if="geterUser.data.profile_image"
+                :src="geterUser.data.profile_image"
+                alt="Foto Profil"
+              />
+              <img
+                v-else
+                src="https://via.placeholder.com/150"
+                alt="Default Avatar"
+              />
+            </ion-avatar>
 
-          <p><strong>Email:</strong> {{ user.email }}</p>
-          <p><strong>Nomor HP:</strong> {{ user.phone || "Belum tersedia" }}</p>
-        </ion-card-content>
-      </ion-card>
+            <p><strong>Email:</strong> {{ geterUser.data.email }}</p>
+            <p>
+              <strong>Nomor HP:</strong> {{ geterUser.data.phone || "Belum tersedia" }}
+            </p>
+          </ion-card-content>
+        </ion-card>
 
-      <ion-button expand="block" color="danger" @click="logout">
-        Logout
-      </ion-button>
-      <ion-alert
-        :is-open="isAlertOpen"
-        header="Konfirmasi Logout"
-        message="Apakah Anda yakin ingin logout?"
-        :buttons="alertButtons"
-        @didDismiss="isAlertOpen = false"
-      />
+        <ion-button expand="block" color="danger" @click="logout">
+          Logout
+        </ion-button>
+        <ion-alert
+          :is-open="isAlertOpen"
+          header="Konfirmasi Logout"
+          message="Apakah Anda yakin ingin logout?"
+          :buttons="alertButtons"
+          @didDismiss="isAlertOpen = false"
+        />
+      </div>
     </ion-content>
   </ion-page>
 </template>
@@ -77,6 +81,9 @@ import {
 const user = ref(null);
 const router = useRouter();
 const userData = ref(null);
+const getUser = localStorage.getItem("master_user");
+const parsedUser = ref(null);
+const geterUser = ref(null);
 
 const fetchUserProfile = async () => {
   try {
@@ -92,9 +99,10 @@ const fetchUserProfile = async () => {
       headers: { Authorization: `Bearer ${token}` },
     });
 
-    user.value = response.data; // Pastikan struktur API benar
-
-    console.log("✅ Data pengguna:", user.value);
+    user.value = (await response).data; // Pastikan struktur API benar
+    parsedUser.value = JSON.stringify(user.value)
+    geterUser.value = JSON.parse(parsedUser.value)
+    showToast("✅ Data pengguna:" + geterUser.value.data.user, "success");
   } catch (error) {
     console.error(
       "❌ Gagal mengambil data pengguna:",
@@ -151,3 +159,14 @@ const refreshData = async (event) => {
 // Panggil fetchUserProfile saat halaman dimuat
 onMounted(fetchUserProfile);
 </script>
+
+<style scoped>
+.content-container {
+  display: block;
+  gap: 0px;
+  justify-content: center;
+  align-items: center;
+  height: 90vh;
+  background-color: darkgray;
+}
+</style>

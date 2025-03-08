@@ -29,10 +29,6 @@ const routes: Array<RouteRecordRaw> = [
     component: Login
   },
   {
-    path: '/rekap',
-    component: RekapAbsen
-  },
-  {
     path: '/',
     component: TabsPage,
     children: [
@@ -56,6 +52,10 @@ const routes: Array<RouteRecordRaw> = [
       {
         path: '/out',
         component: AbsenPulang
+      },
+      {
+        path: '/rekap',
+        component: RekapAbsen
       },
       {
         path: '/logout',

@@ -235,8 +235,9 @@ const submitAbsen = async () => {
     printRes.value = JSON.stringify(resultAbsen);
     printRes2.value = JSON.parse(printRes.value);
     
-    router.push("/");
+    // window.location.reload("/");
     await showToast(printRes2.value.message, "success");
+    router.push("/");
     // absenTime.value = response.data.time_in; // Perbarui UI dengan waktu absen
   } catch (error) {
     console.error("Gagal absen:", error.response?.data || error.message);
@@ -244,6 +245,7 @@ const submitAbsen = async () => {
     await showToast(error.response.data.message, "danger");
   } finally {
     loading.value = false;
+    router.push("/");
   }
 };
 

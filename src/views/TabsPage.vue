@@ -99,7 +99,7 @@ const alertButtons = [
   {
     text: "Logout",
     handler: async () => {
-      await logout(); // Panggil fungsi logout jika user menekan "Logout"
+      logout(); // Panggil fungsi logout jika user menekan "Logout"
     },
   },
 ];

@@ -101,9 +101,9 @@ export default {
       showPassword.value = !showPassword.value;
     };
 
-
     const login = async () => {
-      if (!username.value) return await showToast("Username harus diisi!", "danger");
+      if (!username.value)
+        return await showToast("Username harus diisi!", "danger");
       else if (!password.value) {
         return await showToast("Password harus diisi!", "danger");
       }
@@ -123,15 +123,19 @@ export default {
         localStorage.setItem("master_user", JSON.stringify(masterUser));
 
         // router.push("/"); // Redirect ke halaman utama
-        
-        loading.value = false;
+
         //clearForm
         username.value = "";
         password.value = "";
-        router.push('/');
+        router.push("/");
+        window.location.replace("/")
         await showToast(response.data.message, "success");
+
       } catch (error) {
-        await showToast(error.response.data.error, "danger");
+        await showToast(error.response.data.message, "danger");
+        loading.value = false;
+      } finally {
+        loading.value = false;
       }
     };
 
