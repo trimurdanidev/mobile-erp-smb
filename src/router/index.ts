@@ -47,6 +47,7 @@ const routes: Array<RouteRecordRaw> = [
       },
       {
         path: '/in',
+        // name: AbsenMasuk,
         component: AbsenMasuk
       },
       {

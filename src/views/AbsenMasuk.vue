@@ -40,8 +40,12 @@
 
           <!-- Input Keterangan -->
           <ion-item>
-            <ion-label position="stacked">Keterangan</ion-label>
-            <ion-input v-model="keterangan"></ion-input>
+            <!-- <ion-label position="stacked">Keterangan</ion-label> -->
+            <ion-input
+              ref="keterangan"
+              label-placement="Keterangan"
+              placeholder="Masukkan Keterangan"
+            ></ion-input>
           </ion-item>
           <!-- </div> -->
 
@@ -72,7 +76,6 @@ const dateAbsen = ref("");
 const absenTime = ref(null);
 const latitude = ref(null);
 const longitude = ref(null);
-const keterangan = ref(null);
 const selfieTaken = ref(null);
 const videoElement = ref(null);
 const canvasElement = ref(null);
@@ -86,7 +89,8 @@ const printRes2 = ref(null);
 const dataPosition = ref(null);
 const prinLok = ref(null);
 const fileName = ref(null);
-const imageBase64 =ref(null);
+const imageBase64 = ref(null);
+const keterangan = ref(null);
 
 // 📌 1. Ambil Waktu & Tanggal Saat Ini
 const getCurrentDateTime = () => {
@@ -175,12 +179,11 @@ const takeSelfie = () => {
   context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
   selfieImage.value = canvas.toDataURL("image/jpg");
-  selfieTaken.value = "data:image/jpeg;base64," +selfieImage.value;
+  selfieTaken.value = "data:image/jpeg;base64," + selfieImage.value;
 
   // this.imagePreview = "data:image/jpeg;base64," + this.imageBase64; // Untuk preview
 
-      console.log("✅ Base64 String:", this.selfieImage.substring(0, 50) + "..."); // Cek sebagian
-  
+  console.log("✅ Base64 String:", this.selfieImage.substring(0, 50) + "..."); // Cek sebagian
 };
 
 const dataURItoBlob = (dataURI) => {
@@ -212,7 +215,8 @@ const submitAbsen = async () => {
     absenData.append("time_in", time()),
       absenData.append("latitude_in", latitude.value);
     absenData.append("longitude_in", longitude.value);
-    absenData.append("absensi_ref", keterangan.value);
+    absenData.append("absensi_ref", keterangan.value.value);
+    absenData.append("address_in", dataPosition.value);
     const blob = dataURItoBlob(selfieImage.value);
 
     if (blob.size === 0) {
@@ -234,18 +238,18 @@ const submitAbsen = async () => {
     const resultAbsen = (await response).data;
     printRes.value = JSON.stringify(resultAbsen);
     printRes2.value = JSON.parse(printRes.value);
-    
+
     // window.location.reload("/");
     await showToast(printRes2.value.message, "success");
-    router.push("/");
+    router.replace("/");
     // absenTime.value = response.data.time_in; // Perbarui UI dengan waktu absen
   } catch (error) {
     console.error("Gagal absen:", error.response?.data || error.message);
-    router.push("/");
+    router.replace("/");
     await showToast(error.response.data.message, "danger");
   } finally {
     loading.value = false;
-    router.push("/");
+    router.replace("/");
   }
 };
 

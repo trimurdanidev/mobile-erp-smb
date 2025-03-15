@@ -1,13 +1,13 @@
 <template>
   <ion-page>
     <HomeHeader />
-    <ion-content class="ion-padding" :fullscreen="true">
+    <ion-content class="ion-padding">
       <div class="menu-container">
         <ion-button
           expand="block"
           class="menu-button"
+          color="primary"
           @click="goTo('in')"
-          :disabled="disableButtonMasuk"
         >
           <ion-icon :icon="logInOutline" slot="start"></ion-icon>
           Absen Masuk
@@ -34,7 +34,7 @@
           Rekap Absensi
         </ion-button>
       </div>
-      <ion-refresher slot="fixed" @ionRefresh="handleRefresh">
+      <ion-refresher slot="fixed" @ionRefresh="refreshPage">
         <ion-refresher-content />
       </ion-refresher>
     </ion-content>
@@ -61,10 +61,8 @@ import {
 } from "ionicons/icons";
 import { onMounted, ref } from "vue";
 import api from "@/services/api";
-import { showToast } from "@/services/toastHandlers";
 import HomeHeader from "../views/HomeHeader.vue";
 import TabsPage from "../views/TabsPage.vue";
-import handleRefresh from "../views/HomeHeader.vue";
 import { checkToken } from "@/services/auth";
 
 export default {
@@ -78,7 +76,7 @@ export default {
     IonIcon,
     HomeHeader,
     TabsPage,
-    handleRefresh,
+    // handleRefresh,
     IonRefresher,
     IonRefresherContent,
   },
@@ -92,6 +90,7 @@ export default {
     const ff = ref(null);
     const disableButtonPulang = ref(true);
     const disableButtonMasuk = ref(false);
+    const menu = ref(null);
 
     Tanggal.value =
       today.getFullYear() +
@@ -99,10 +98,6 @@ export default {
       String(today.getMonth() + 1).padStart(2, "0") +
       "-" +
       today.getDate();
-
-    const goTo = (menu) => {
-      router.push(`/${menu}`);
-    };
 
     const loadAbsensi = async () => {
       try {
@@ -115,35 +110,46 @@ export default {
         const parsedAbsenMasuk = (await response).data;
         absenMasuk.value = JSON.stringify(parsedAbsenMasuk.data);
         ff.value = JSON.parse(absenMasuk.value);
-        // await showToast(ff.user,'success');
       } catch (error) {
         console.error("Gagal memuat data absensi:", error);
-        // await showToast(error.response.data.message, "danger");
-        // disableButtonPulang.value = true;
       }
     };
 
-    const handleRefresh = async (event) => {
+    const RefreshData = async (event) => {
       console.log("Memuat ulang data...");
 
       // Simulasi load data baru
       setTimeout(() => {
-        loadAbsensi();
+        window.location.reload();
         console.log("Data diperbarui!");
         event.target.complete(); // Hentikan loading
       }, 2000);
+    };
+
+    const goTo = (menu) => {
+      if (loadAbsensi) {
+        RefreshData();
+        router.push(`/${menu}`);
+      } else {
+        router.push(`/${menu}`);
+      }
+    };
+
+    const refreshPage = () => {
+      router.go(0); // Efek sama dengan reload, tapi hanya refresh route
     };
 
     onMounted(() => {
       //   getHariTanggal();
       loadAbsensi();
       checkToken();
-      handleRefresh();
+      // refreshPage();
 
       if (ff.value) {
         disableButtonMasuk.value = true;
+
         // disableButtonPulang.value = false;
-      // } else {
+        // } else {
       }
     });
 
@@ -153,12 +159,13 @@ export default {
       logOutOutline,
       documentTextOutline,
       userData,
-      handleRefresh,
       TabsPage,
       Tanggal,
       disableButtonPulang,
       disableButtonMasuk,
-      // IonRefresher
+      RefreshData,
+      IonRefresher,
+      IonRefresherContent,
     };
   },
 };
