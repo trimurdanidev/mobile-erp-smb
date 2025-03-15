@@ -55,7 +55,7 @@
                 <ion-col size="5" class="text-align-left">Departemen</ion-col>
                 <ion-col size="2" class="text-align-center">:</ion-col>
                 <ion-col size="5" class="text-align-right">
-                  <strong>{{ geterUser.data.departemen_name || "Belum tersedia" }}</strong>
+                  <strong>{{ geterUser.data.department_name || "Belum tersedia" }}</strong>
                 </ion-col>
               </ion-row>
             </ion-grid>

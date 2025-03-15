@@ -89,10 +89,6 @@ export default {
     };
     const userData = ref([]);
 
-    const goTo = (menu) => {
-      router.push(`/${menu}`);
-    };
-
     const loadAbsensi = async () => {
       try {
         // if (getUser) {
@@ -126,7 +122,6 @@ export default {
     });
 
     return {
-      goTo,
       hariIni,
       tanggalHariIni,
       logInOutline,

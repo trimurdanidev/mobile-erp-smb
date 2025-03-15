@@ -92,7 +92,7 @@ const showLogoutConfirm = () => {
 };
 
 // Tombol di dalam dialog
-const alertButtons = [
+const alertButtons = ref([
   {
     text: "Batal",
     role: "cancel",
@@ -103,7 +103,7 @@ const alertButtons = [
       logout(); // Panggil fungsi logout jika user menekan "Logout"
     },
   },
-];
+]);
 // export default {
 // components: {
 //     logout,

@@ -38,12 +38,30 @@
               <ion-spinner v-if="loading"></ion-spinner>
               <span v-else>Login</span>
             </ion-button>
+            <br />
+            <!-- <ion-item> -->
+            <ion-label position="stacked">Lupa Password ?</ion-label>
+            <ion-button
+              id="reset-pass"
+              color="danger"
+              expand="block"
+              @click="isAlertOpen"
+              :disabled="true"
+              >Reset Password</ion-button
+            >
+            <ion-alert
+              trigger="reset-pass"
+              header="Mohon Input Username ERP Anda"
+              :buttons="alertButtons"
+              :inputs="alertInputs"
+            ></ion-alert>
+            <!-- </ion-item> -->
             <br /><br />
             <p
               class="mt-10 text-center align-text-bottom text-xs font-normal text-gray-900"
             >
               <center>
-                © FAH Software 2025. All rights reserved.<br />Versi 0.0.1
+                © FAH Software 2025. All rights reserved.<br />Versi 0.0.2
               </center>
             </p>
           </ion-card-content>
@@ -70,10 +88,12 @@ import {
   IonCardContent,
   IonIcon,
   IonSpinner,
+  IonAlert,
 } from "@ionic/vue";
 import { eye, eyeOff } from "ionicons/icons";
 import { showToast } from "@/services/toastHandlers";
 import api from "@/services/api";
+import { computed } from "vue";
 
 export default {
   components: {
@@ -89,6 +109,7 @@ export default {
     IonCardContent,
     IonIcon,
     IonSpinner,
+    IonAlert,
   },
   setup() {
     const username = ref("");
@@ -128,16 +149,71 @@ export default {
         username.value = "";
         password.value = "";
         router.push("/");
-        window.location.replace("/")
+        window.location.replace("/");
         await showToast(response.data.message, "success");
-
       } catch (error) {
-        await showToast(error.response.data.message, "danger");
-        loading.value = false;
+        if (error.response && error.response.data) {
+          await showToast(error.response.data.error, "danger");
+          loading.value = false;
+        } else {
+          await showToast("Terjadi kesalahan", "danger");
+          loading.value = false;
+        }
       } finally {
         loading.value = false;
       }
     };
+
+    const alertButtons = ref([
+      {
+        text: "Tidak",
+        role: "cancel",
+      },
+      {
+        text: "Ya",
+        handler: async () => {
+          resetPass();
+        },
+      },
+    ]);
+
+    const resetPass = async () => {
+      loading.value = true;
+      try {
+      } catch (error) {
+      } finally {
+        loading.value = false;
+      }
+    };
+
+    // const alertButtons = ['OK'];
+    const alertInputs = ref([
+      {
+        placeholder: "Username",
+      },
+      {
+        placeholder: "Nickname (max 8 characters)",
+        attributes: {
+          maxlength: 8,
+        },
+      },
+      {
+        type: "number",
+        placeholder: "Age",
+        min: 1,
+        max: 100,
+      },
+      {
+        type: "textarea",
+        placeholder: "A little about yourself",
+      },
+    ]);
+
+    const showLogoutConfirm = () => {
+      isAlertOpen.value = true;
+    };
+
+    // Tombol di dalam dialog
 
     return {
       username,
@@ -176,6 +252,12 @@ export default {
 
 .inner-scroll {
   background-color: darkgray;
+}
+
+.btn-reset {
+  background-color: red;
+  color: whitesmoke;
+  flood-color: red;
 }
 </style>
   

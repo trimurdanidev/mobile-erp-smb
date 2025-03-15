@@ -48,7 +48,7 @@
             </ion-label>
             <ion-img
               v-if="absen.images_in"
-              :src="'http://202.10.42.150:8080/storage/' + absen.images_in"
+              :src="storageUrl + absen.images_in"
               alt="Foto Absensi"
             >
             </ion-img>
@@ -91,6 +91,7 @@ import {
 } from "@ionic/vue";
 import api from "@/services/api";
 import { showToast } from "@/services/toastHandlers";
+import { inject } from "vue";
 
 const absensi = ref([]);
 const rekap = ref(null);
@@ -98,6 +99,7 @@ const getUser = localStorage.getItem("master_user");
 const userData = ref([]);
 const page = ref(1);
 const hasMoreData = ref(true);
+const storageUrl = inject('storageUrl');
 
 const loadAbsensi = async () => {
   //   if (!startDate.value || !endDate.value) {
