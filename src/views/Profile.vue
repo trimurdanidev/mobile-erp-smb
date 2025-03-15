@@ -37,13 +37,13 @@
             </ion-avatar>
 
             <ion-grid>
-              <ion-row>
+              <!-- <ion-row>
                 <ion-col size="5" class="text-align-left">Email</ion-col>
                 <ion-col size="2" class="text-align-center">:</ion-col>
                 <ion-col size="5" class="text-align-right">
                   <strong>{{ geterUser.data.email }}</strong>
                 </ion-col>
-              </ion-row>
+              </ion-row> -->
               <ion-row>
                 <ion-col size="5" class="text-align-left">Nomor HP</ion-col>
                 <ion-col size="2" class="text-align-center">:</ion-col>
@@ -60,6 +60,9 @@
               </ion-row>
             </ion-grid>
           </ion-card-content>
+          <div class="edit-profile-button">
+            <ion-button expand="block" color="success" @click="showModalProfile = true">Edit Profile</ion-button>
+          </div>
         </ion-card>
           
         <ion-grid>
@@ -95,10 +98,6 @@
         <ion-content>
           <!-- Form untuk input password -->
           <ion-item>
-            <ion-label position="floating">Old Password</ion-label>
-            <ion-input v-model="oldPassword" type="password" required></ion-input>
-          </ion-item>
-          <ion-item>
             <ion-label position="floating">New Password</ion-label>
             <ion-input v-model="newPassword" type="password" required></ion-input>
           </ion-item>
@@ -106,7 +105,31 @@
             <ion-label position="floating">Confirm New Password</ion-label>
             <ion-input v-model="confirmPassword" type="password" required></ion-input>
           </ion-item>
-          <ion-button expand="block" @click="handleSubmit">Change Password</ion-button>
+          <ion-button expand="block" @click="changePassword">Change Password</ion-button>
+        </ion-content>
+      </ion-modal>
+
+      <!-- Modal untuk Edit Profile -->
+      <ion-modal :is-open="showModalProfile" @did-dismiss="closeModalProfile">
+        <ion-header>
+          <ion-toolbar>
+            <ion-title>Change Password</ion-title>
+            <ion-buttons slot="end">
+              <ion-button @click="closeModalProfile">Close</ion-button>
+            </ion-buttons>
+          </ion-toolbar>
+        </ion-header>
+        <ion-content>
+          <!-- Form untuk input password -->
+          <!-- <ion-item>
+            <ion-label position="floating">Email</ion-label>
+            <ion-input v-model="email" type="text"></ion-input>
+          </ion-item> -->
+          <ion-item>
+            <ion-label position="floating">No. Handphone</ion-label>
+            <ion-input v-model="phone" type="text"></ion-input>
+          </ion-item>
+          <ion-button expand="block" @click="saveProfile">Save</ion-button>
         </ion-content>
       </ion-modal>
     </ion-content>
@@ -139,7 +162,8 @@ import {
   IonModal,
   IonInput,
   IonItem,
-  IonLabel
+  IonLabel,
+  loadingController
 } from "@ionic/vue";
 
 const user = ref(null);
@@ -148,6 +172,24 @@ const userData = ref(null);
 const getUser = localStorage.getItem("master_user");
 const parsedUser = ref(null);
 const geterUser = ref(null);
+
+const phone = ref(null);
+
+let loading = null;
+
+const showLoading = async () => {
+  loading = await loadingController.create({
+    message: "Tunggu sebentar...",
+    spinner: "dots",
+  });
+  await loading.present();
+};
+
+const hideLoading = async () => {
+  if (loading) {
+    await loading.dismiss();
+  }
+};
 
 const fetchUserProfile = async () => {
   try {
@@ -166,6 +208,7 @@ const fetchUserProfile = async () => {
     user.value = (await response).data; // Pastikan struktur API benar
     parsedUser.value = JSON.stringify(user.value)
     geterUser.value = JSON.parse(parsedUser.value)
+    phone.value = geterUser.value.data.phone;
     showToast("✅ Data pengguna:" + geterUser.value.data.user, "success");
   } catch (error) {
     console.error(
@@ -226,9 +269,9 @@ onMounted(fetchUserProfile);
 // change password
 // Variabel untuk mengontrol modal
 const showModal = ref(false);
+const showModalProfile = ref(false);
 
 // Variabel untuk input form
-const oldPassword = ref('');
 const newPassword = ref('');
 const confirmPassword = ref('');
 
@@ -237,18 +280,61 @@ const closeModal = () => {
   showModal.value = false;
 };
 
+const closeModalProfile = () => {
+  showModalProfile.value = false;
+};
+
 // Fungsi untuk menangani submit
-const handleSubmit = () => {
+const changePassword = async () => {
+  await showLoading();
+  
   if (newPassword.value !== confirmPassword.value) {
+    await hideLoading();
     alert('New password and confirm password do not match!');
     return;
   }
 
   // Logika untuk update password (misalnya API call)
-  alert('Password changed successfully!');
-  
+  try {
+    const response = await api.put("/update/" + userData.value.id, {
+      password: newPassword.value,
+    });
+    await hideLoading();
+    await showToast("Password changed successfully!", "success");
+  } catch (error) {
+    await hideLoading();
+    await showToast(error.response.data.message, "danger");
+  } finally {
+    await hideLoading();
+  }
+
   // Tutup modal setelah submit
   closeModal();
+};
+
+
+// edit profile
+
+// Fungsi untuk menangani submit
+const saveProfile = async () => {
+  await showLoading();
+  // Logika untuk update password (misalnya API call)
+  try {
+    const response = await api.put("/update/" + userData.value.id, {
+      phone: phone.value
+    });
+    await fetchUserProfile();
+    await hideLoading();
+    await showToast("Profile has been updated!", "success");
+  } catch (error) {
+    await hideLoading();
+    await showToast(error.response.data.message, "danger");
+  } finally {
+    await hideLoading();
+  }
+
+  // Tutup modal setelah submit
+  closeModalProfile();
 };
 </script>
 
@@ -270,5 +356,10 @@ const handleSubmit = () => {
 
 ion-button {
   font-size: 12px;
+}
+
+.edit-profile-button {
+  width: 150px;
+  margin: auto;
 }
 </style>
