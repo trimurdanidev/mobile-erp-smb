@@ -22,7 +22,7 @@
           </ion-card-header>
 
           <ion-card-content class="ion-text-center">
-            <ion-avatar>
+            <ion-avatar class="avatar">
               <img
                 v-if="geterUser.data.profile_image"
                 :src="geterUser.data.profile_image"
@@ -30,21 +30,49 @@
               />
               <img
                 v-else
-                src="https://via.placeholder.com/150"
+                style="background-color: white;"
+                src="/public/user.png"
                 alt="Default Avatar"
               />
             </ion-avatar>
 
-            <p><strong>Email:</strong> {{ geterUser.data.email }}</p>
-            <p>
-              <strong>Nomor HP:</strong> {{ geterUser.data.phone || "Belum tersedia" }}
-            </p>
+            <ion-grid>
+              <ion-row>
+                <ion-col size="5" class="text-align-left">Email</ion-col>
+                <ion-col size="2" class="text-align-center">:</ion-col>
+                <ion-col size="5" class="text-align-right">
+                  <strong>{{ geterUser.data.email }}</strong>
+                </ion-col>
+              </ion-row>
+              <ion-row>
+                <ion-col size="5" class="text-align-left">Nomor HP</ion-col>
+                <ion-col size="2" class="text-align-center">:</ion-col>
+                <ion-col size="5" class="text-align-right">
+                  <strong>{{ geterUser.data.phone  || "Belum tersedia" }}</strong>
+                </ion-col>
+              </ion-row>
+              <ion-row>
+                <ion-col size="5" class="text-align-left">Departemen</ion-col>
+                <ion-col size="2" class="text-align-center">:</ion-col>
+                <ion-col size="5" class="text-align-right">
+                  <strong>{{ geterUser.data.departemen_name || "Belum tersedia" }}</strong>
+                </ion-col>
+              </ion-row>
+            </ion-grid>
           </ion-card-content>
         </ion-card>
+          
+        <ion-grid>
+          <ion-row>
+            <ion-col size="6">
+              <ion-button expand="block" color="primary" @click="showModal = true">Change Password</ion-button>
+            </ion-col>
+            <ion-col size="6">
+              <ion-button expand="block" color="danger" @click="logout">Logout</ion-button>
+            </ion-col>
+          </ion-row>
+        </ion-grid>
 
-        <ion-button expand="block" color="danger" @click="logout">
-          Logout
-        </ion-button>
         <ion-alert
           :is-open="isAlertOpen"
           header="Konfirmasi Logout"
@@ -53,6 +81,34 @@
           @didDismiss="isAlertOpen = false"
         />
       </div>
+
+      <!-- Modal untuk Change Password -->
+      <ion-modal :is-open="showModal" @did-dismiss="closeModal">
+        <ion-header>
+          <ion-toolbar>
+            <ion-title>Change Password</ion-title>
+            <ion-buttons slot="end">
+              <ion-button @click="closeModal">Close</ion-button>
+            </ion-buttons>
+          </ion-toolbar>
+        </ion-header>
+        <ion-content>
+          <!-- Form untuk input password -->
+          <ion-item>
+            <ion-label position="floating">Old Password</ion-label>
+            <ion-input v-model="oldPassword" type="password" required></ion-input>
+          </ion-item>
+          <ion-item>
+            <ion-label position="floating">New Password</ion-label>
+            <ion-input v-model="newPassword" type="password" required></ion-input>
+          </ion-item>
+          <ion-item>
+            <ion-label position="floating">Confirm New Password</ion-label>
+            <ion-input v-model="confirmPassword" type="password" required></ion-input>
+          </ion-item>
+          <ion-button expand="block" @click="handleSubmit">Change Password</ion-button>
+        </ion-content>
+      </ion-modal>
     </ion-content>
   </ion-page>
 </template>
@@ -76,6 +132,14 @@ import {
   IonAvatar,
   IonRefresher,
   IonRefresherContent,
+  IonAlert,
+  IonGrid,
+  IonRow,
+  IonCol,
+  IonModal,
+  IonInput,
+  IonItem,
+  IonLabel
 } from "@ionic/vue";
 
 const user = ref(null);
@@ -158,6 +222,34 @@ const refreshData = async (event) => {
 
 // Panggil fetchUserProfile saat halaman dimuat
 onMounted(fetchUserProfile);
+
+// change password
+// Variabel untuk mengontrol modal
+const showModal = ref(false);
+
+// Variabel untuk input form
+const oldPassword = ref('');
+const newPassword = ref('');
+const confirmPassword = ref('');
+
+// Fungsi untuk menutup modal
+const closeModal = () => {
+  showModal.value = false;
+};
+
+// Fungsi untuk menangani submit
+const handleSubmit = () => {
+  if (newPassword.value !== confirmPassword.value) {
+    alert('New password and confirm password do not match!');
+    return;
+  }
+
+  // Logika untuk update password (misalnya API call)
+  alert('Password changed successfully!');
+  
+  // Tutup modal setelah submit
+  closeModal();
+};
 </script>
 
 <style scoped>
@@ -168,5 +260,15 @@ onMounted(fetchUserProfile);
   align-items: center;
   height: 90vh;
   background-color: darkgray;
+}
+
+.avatar {
+  margin: 20px auto;
+  width: 200px;
+  height: 200px;
+}
+
+ion-button {
+  font-size: 12px;
 }
 </style>
