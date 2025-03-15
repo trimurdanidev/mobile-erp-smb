@@ -54,6 +54,7 @@ import {
   IonRefresherContent,
   IonTitle,
   IonToolbar,
+  IonAlert
 } from "@ionic/vue";
 import {
   ellipse,
