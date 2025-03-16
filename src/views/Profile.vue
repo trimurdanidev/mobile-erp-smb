@@ -24,8 +24,8 @@
           <ion-card-content class="ion-text-center">
             <ion-avatar class="avatar">
               <img
-                v-if="geterUser.data.profile_image"
-                :src="geterUser.data.profile_image"
+                v-if="geterUser.data.avatar"
+                :src="geterUser.data.avatar"
                 alt="Foto Profil"
               />
               <img
@@ -34,16 +34,44 @@
                 src="/public/user.png"
                 alt="Default Avatar"
               />
+              <!-- Icon Kamera -->
+              <ion-icon
+                :icon="camera"
+                class="camera-icon"
+                @click="changeAvatar"
+              ></ion-icon>
             </ion-avatar>
+            <!-- File Input untuk Mengubah Avatar -->
+            <input
+              type="file"
+              ref="fileInput"
+              style="display: none"
+              accept=".jpg, .jpeg, .png"
+              @change="onFileChange"
+            />
 
             <ion-grid>
-              <!-- <ion-row>
-                <ion-col size="5" class="text-align-left">Email</ion-col>
+              <ion-row>
+                <ion-col size="5" class="text-align-left">Nama Lengkap</ion-col>
                 <ion-col size="2" class="text-align-center">:</ion-col>
                 <ion-col size="5" class="text-align-right">
-                  <strong>{{ geterUser.data.email }}</strong>
+                  <strong>{{ geterUser.data.description || "Belum tersedia" }}</strong>
                 </ion-col>
-              </ion-row> -->
+              </ion-row>
+              <ion-row>
+                <ion-col size="5" class="text-align-left">NIK</ion-col>
+                <ion-col size="2" class="text-align-center">:</ion-col>
+                <ion-col size="5" class="text-align-right">
+                  <strong>{{ geterUser.data.nik || "Belum tersedia" }}</strong>
+                </ion-col>
+              </ion-row>
+              <ion-row>
+                <ion-col size="5" class="text-align-left">Username</ion-col>
+                <ion-col size="2" class="text-align-center">:</ion-col>
+                <ion-col size="5" class="text-align-right">
+                  <strong>{{ geterUser.data.user || "Belum tersedia" }}</strong>
+                </ion-col>
+              </ion-row>
               <ion-row>
                 <ion-col size="5" class="text-align-left">Nomor HP</ion-col>
                 <ion-col size="2" class="text-align-center">:</ion-col>
@@ -55,7 +83,7 @@
                 <ion-col size="5" class="text-align-left">Departemen</ion-col>
                 <ion-col size="2" class="text-align-center">:</ion-col>
                 <ion-col size="5" class="text-align-right">
-                  <strong>{{ geterUser.data.departemen_name || "Belum tersedia" }}</strong>
+                  <strong>{{ geterUser.data.department_name || "Belum tersedia" }}</strong>
                 </ion-col>
               </ion-row>
             </ion-grid>
@@ -88,7 +116,7 @@
       <!-- Modal untuk Change Password -->
       <ion-modal :is-open="showModal" @did-dismiss="closeModal">
         <ion-header>
-          <ion-toolbar>
+          <ion-toolbar style="padding-top: 20px;">
             <ion-title>Change Password</ion-title>
             <ion-buttons slot="end">
               <ion-button @click="closeModal">Close</ion-button>
@@ -112,7 +140,7 @@
       <!-- Modal untuk Edit Profile -->
       <ion-modal :is-open="showModalProfile" @did-dismiss="closeModalProfile">
         <ion-header>
-          <ion-toolbar>
+          <ion-toolbar style="padding-top: 20px;">
             <ion-title>Change Password</ion-title>
             <ion-buttons slot="end">
               <ion-button @click="closeModalProfile">Close</ion-button>
@@ -126,8 +154,19 @@
             <ion-input v-model="email" type="text"></ion-input>
           </ion-item> -->
           <ion-item>
-            <ion-label position="floating">No. Handphone</ion-label>
-            <ion-input v-model="phone" type="text"></ion-input>
+            <ion-input label="Nama Lengkap" v-model="description" label-placement="floating" placeholder="Enter text"></ion-input>
+          </ion-item>
+          <ion-item>
+            <ion-input label="NIK" v-model="nik" label-placement="floating" placeholder="Enter text" readonly></ion-input>
+          </ion-item>
+          <ion-item>
+            <ion-input label="Username" v-model="user" label-placement="floating" placeholder="Enter text" readonly></ion-input>
+          </ion-item>
+          <ion-item>
+            <ion-input label="No. Handphone" v-model="phone" label-placement="floating" placeholder="Enter text"></ion-input>
+          </ion-item>
+          <ion-item>
+            <ion-input label="Departemen" v-model="department_name" label-placement="floating" placeholder="Enter text" readonly></ion-input>
           </ion-item>
           <ion-button expand="block" @click="saveProfile">Save</ion-button>
         </ion-content>
@@ -165,6 +204,7 @@ import {
   IonLabel,
   loadingController
 } from "@ionic/vue";
+import { camera } from "ionicons/icons";
 
 const user = ref(null);
 const router = useRouter();
@@ -173,7 +213,10 @@ const getUser = localStorage.getItem("master_user");
 const parsedUser = ref(null);
 const geterUser = ref(null);
 
+const nik = ref(null);
+const description = ref(null);
 const phone = ref(null);
+const department_name = ref(null);
 
 let loading = null;
 
@@ -209,6 +252,10 @@ const fetchUserProfile = async () => {
     parsedUser.value = JSON.stringify(user.value)
     geterUser.value = JSON.parse(parsedUser.value)
     phone.value = geterUser.value.data.phone;
+    nik.value = geterUser.value.data.nik;
+    description.value = geterUser.value.data.description;
+    department_name.value = geterUser.value.data.department_name;
+    user.value = geterUser.value.data.user;
     showToast("✅ Data pengguna:" + geterUser.value.data.user, "success");
   } catch (error) {
     console.error(
@@ -321,7 +368,10 @@ const saveProfile = async () => {
   // Logika untuk update password (misalnya API call)
   try {
     const response = await api.put("/update/" + userData.value.id, {
-      phone: phone.value
+      phone: phone.value,
+      description: description.value
+      // username: username.value,
+      // nik: nik.value,
     });
     await fetchUserProfile();
     await hideLoading();
@@ -336,6 +386,44 @@ const saveProfile = async () => {
   // Tutup modal setelah submit
   closeModalProfile();
 };
+
+
+
+
+// change profile avatar
+const fileInput = ref(null);
+
+// Fungsi untuk memicu file input
+const changeAvatar = () => {
+  fileInput.value.click();  // Trigger file input
+};
+
+// Fungsi untuk menangani perubahan file
+const onFileChange = async (event) => {
+  const file = event.target.files[0];
+  if (file) {
+    const reader = new FileReader();
+    const formData = new FormData();
+    formData.append('avatar', file);
+    try {
+      const response = await api.post('/upload-avatar/' + userData.value.id, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          // Sertakan token jika Anda menggunakan otentikasi
+          // 'Authorization': `Bearer ${authToken}`
+        },
+      });
+
+      // Setelah gambar berhasil diupload, perbarui avatar pengguna
+      if (response.data.success) {
+        console.log(response.data)
+        geterUser.value.data.avatar = response.data.avatarUrl; // URL gambar baru
+      }
+    } catch (error) {
+      console.error('Error uploading avatar:', error);
+    }
+  }
+};
 </script>
 
 <style scoped>
@@ -347,13 +435,6 @@ const saveProfile = async () => {
   height: 90vh;
   background-color: darkgray;
 }
-
-.avatar {
-  margin: 20px auto;
-  width: 200px;
-  height: 200px;
-}
-
 ion-button {
   font-size: 12px;
 }
@@ -362,4 +443,30 @@ ion-button {
   width: 150px;
   margin: auto;
 }
+
+.avatar {
+  margin: 20px auto;
+  width: 200px;
+  height: 200px;
+  position: relative;
+}
+
+.camera-icon {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  font-size: 30px;
+  color: white;
+  background-color: rgba(0, 0, 0, 0.5);
+  border-radius: 50%;
+  padding: 8px;
+  cursor: pointer;
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 </style>
