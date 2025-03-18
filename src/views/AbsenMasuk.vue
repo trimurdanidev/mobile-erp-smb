@@ -1,7 +1,10 @@
 <template>
   <ion-page>
-    <ion-content class="ion-padding">
+    <ion-content color="full">
       <div class="content-container">
+        <ion-refresher slot="fixed" @ionRefresh="handleRefresh">
+          <ion-refresher-content></ion-refresher-content>
+        </ion-refresher>
         <ion-header>
           <ion-toolbar>
             <ion-title>Absen Masuk</ion-title>
@@ -60,6 +63,20 @@
           </ion-button>
         </div>
       </div>
+      <ion-modal
+        :is-open="showModal"
+        @didDismiss="closeModal"
+        class="custom-modal"
+      >
+        <div class="modal-content">
+          <h3>Absensi Berhasil!</h3>
+          <img src="/assets/thumbs-up.png" width="100px" />
+          <p>
+            Terima kasih tetap semangat dan tingkatkan kinerja pekerjaanmu!.
+          </p>
+          <ion-button @click="showModal = false">OK</ion-button>
+        </div>
+      </ion-modal>
     </ion-content>
   </ion-page>
 </template>
@@ -70,6 +87,8 @@ import api from "@/services/api";
 import { showToast } from "@/services/toastHandlers";
 import { IonSpinner } from "@ionic/vue";
 import router from "@/router";
+import { alertController } from "@ionic/vue";
+
 // State
 const tanggalHariIni = ref("");
 const dateAbsen = ref("");
@@ -91,6 +110,8 @@ const prinLok = ref(null);
 const fileName = ref(null);
 const imageBase64 = ref(null);
 const keterangan = ref(null);
+const showModal = ref(false);
+const isRefreshing = ref(false);
 
 // 📌 1. Ambil Waktu & Tanggal Saat Ini
 const getCurrentDateTime = () => {
@@ -200,6 +221,18 @@ const dataURItoBlob = (dataURI) => {
   return new Blob([uint8Array], { type: mimeString });
 };
 
+const showSuccessAlert = async () => {
+  const alert = await alertController.create({
+    header: "Absensi Berhasil!",
+    message:
+      "<img src='/thumbs-up.png'  width='100px' /><br>Terima kasih tetap semangat dan tingkatkan kinerja pekerjaanmu!",
+    buttons: ["OK"],
+    cssClass: "custom-alert",
+  });
+
+  await alert.present();
+};
+
 // 📌 4. Kirim Data Absen ke API
 const submitAbsen = async () => {
   loading.value = true;
@@ -240,7 +273,8 @@ const submitAbsen = async () => {
     printRes2.value = JSON.parse(printRes.value);
 
     // window.location.reload("/");
-    await showToast(printRes2.value.message, "success");
+    // await showToast(printRes2.value.message, "success");
+    showModal.value = true;
     router.replace("/");
     // absenTime.value = response.data.time_in; // Perbarui UI dengan waktu absen
   } catch (error) {
@@ -251,6 +285,13 @@ const submitAbsen = async () => {
     loading.value = false;
     router.replace("/");
   }
+};
+
+const handleRefresh = (event) => {
+  setTimeout(() => {
+    window.location.reload();
+    event.target.complete();
+  }, 1000);
 };
 
 // 📌 5. Jalankan Fungsi Saat Halaman Dibuka
@@ -308,6 +349,25 @@ ion-button {
   align-items: center;
   height: 90vh;
   background-color: darkgray;
+}
+.custom-alert .alert-wrapper {
+  text-align: center;
+}
+
+.ion-modal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-content {
+  background: black;
+  padding: 20px;
+  border-radius: 10px;
+  text-align: center;
+  width: 80%;
+  max-width: 300px;
+  box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
 }
 </style>
   
