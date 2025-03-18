@@ -28,6 +28,8 @@ import {
   IonContent,
   IonButton,
   IonIcon,
+  IonRefresher,
+  IonRefresherContent
 } from "@ionic/vue";
 import {
   logInOutline,
@@ -47,6 +49,8 @@ export default {
     IonContent,
     IonButton,
     IonIcon,
+    IonRefresher,
+    IonRefresherContent
   },
   setup() {
     const router = useRouter();

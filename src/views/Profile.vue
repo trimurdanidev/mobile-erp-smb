@@ -420,6 +420,7 @@ const onFileChange = async (event) => {
         geterUser.value.data.avatar = response.data.avatarUrl; // URL gambar baru
       }
     } catch (error) {
+      await showToast(error.response.data.message, "danger");
       console.error('Error uploading avatar:', error);
     }
   }

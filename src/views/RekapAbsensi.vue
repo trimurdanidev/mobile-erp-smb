@@ -1,6 +1,6 @@
 <template>
   <ion-page>
-    <ion-content class="ion-padding">
+    <ion-content color="full">
       <div class="content-container">
         <ion-header>
           <ion-toolbar>
@@ -33,19 +33,21 @@
         <ion-button expand="full" @click="loadAbsensi">Refresh</ion-button>
         <ion-list>
           <ion-item v-for="(absen, index) in absensi.data" :key="index">
-            <ion-label>
-              <h2 style="color: blue">
+            <ion-label class="text-align-left">
+              <h2 style="color: blue" >
                 {{ absen.username }} - {{ absen.department }}
               </h2>
-              <p><strong>Tanggal:</strong> {{ absen.date }}</p>
-              <p><strong>Jam Masuk:</strong> {{ absen.time_in }}</p>
-              <!-- <p v-if="absen.time_out">
-                <strong>Jam Keluar:</strong> {{ absen.time_out }}
-              </p>
-              <p v-else style="color: red">
-                <strong>Belum absen keluar</strong>
+              <p style="font-size: 12px"><strong>Tanggal    :</strong> {{ absen.date }}</p>
+              <p style="font-size: 12px"><strong>Jam Masuk  :</strong> {{ absen.time_in }}</p>
+              <p style="font-size: 12px"><strong>Keterangan :</strong> {{ absen.absensi_ref }}</p>
+              <p style="font-size: 10px"><strong>Lokasi :</strong> {{ absen.address_in }}</p>
+
+              <!-- <p style="font-size: 12px">
+                <strong>Alamat Absen  :</strong>
+                {{ absen.address_in }}
               </p> -->
             </ion-label>
+<br>            
             <ion-img
               v-if="absen.images_in"
               :src="storageUrl + absen.images_in"
@@ -99,7 +101,7 @@ const getUser = localStorage.getItem("master_user");
 const userData = ref([]);
 const page = ref(1);
 const hasMoreData = ref(true);
-const storageUrl = inject('storageUrl');
+const storageUrl = inject("storageUrl");
 
 const loadAbsensi = async () => {
   //   if (!startDate.value || !endDate.value) {
@@ -138,11 +140,10 @@ const loadMoreData = async (event) => {
     event.target.complete();
     return;
   }
-  
+
   await loadAbsensi();
   event.target.complete();
 };
-
 
 onMounted(() => {
   loadAbsensi();
@@ -166,7 +167,7 @@ ion-img {
   width: 100px;
   height: 100px;
   object-fit: cover;
-  margin-top: 5px;
+  margin-top: 0px;
 }
 .content-container {
   display: block;

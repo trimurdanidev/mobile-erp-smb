@@ -1,7 +1,10 @@
 <template>
   <ion-page>
     <HomeHeader />
-    <ion-content class="ion-padding">
+    <ion-content color="full">
+      <ion-refresher slot="fixed" @ionRefresh="handleRefresh">
+        <ion-refresher-content></ion-refresher-content>
+      </ion-refresher>
       <div class="menu-container">
         <ion-button
           expand="block"
@@ -34,9 +37,6 @@
           Rekap Absensi
         </ion-button>
       </div>
-      <ion-refresher slot="fixed" @ionRefresh="refreshPage">
-        <ion-refresher-content />
-      </ion-refresher>
     </ion-content>
   </ion-page>
 </template>
@@ -76,9 +76,6 @@ export default {
     IonIcon,
     HomeHeader,
     TabsPage,
-    // handleRefresh,
-    IonRefresher,
-    IonRefresherContent,
   },
   setup() {
     const router = useRouter();
@@ -91,6 +88,13 @@ export default {
     const disableButtonPulang = ref(true);
     const disableButtonMasuk = ref(false);
     const menu = ref(null);
+
+    const handleRefresh = (event) => {
+      setTimeout(() => {
+        window.location.reload();
+        event.target.complete();
+      }, 1000);
+    };
 
     Tanggal.value =
       today.getFullYear() +
@@ -166,6 +170,7 @@ export default {
       RefreshData,
       IonRefresher,
       IonRefresherContent,
+      handleRefresh,
     };
   },
 };
