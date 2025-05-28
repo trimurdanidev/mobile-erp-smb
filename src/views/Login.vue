@@ -45,23 +45,45 @@
               id="reset-pass"
               color="danger"
               expand="block"
-              @click="isAlertOpen"
-              :disabled="true"
+              @click="showResetModal = true"
               >Reset Password</ion-button
             >
-            <ion-alert
-              trigger="reset-pass"
-              header="Mohon Input Username ERP Anda"
-              :buttons="alertButtons"
-              :inputs="alertInputs"
-            ></ion-alert>
+            <ion-modal :is-open="showResetModal" @didDismiss="closeModal">
+              <ion-header>
+                <ion-toolbar>
+                  <ion-title>Reset Password</ion-title>
+                  <ion-buttons slot="end">
+                    <ion-button @click="closeModal">Tutup</ion-button>
+                  </ion-buttons>
+                </ion-toolbar>
+              </ion-header>
+              <ion-content class="ion-padding">
+                <ion-input
+                  v-model="whatsappNumber"
+                  label="Nomor WhatsApp"
+                  label-placement="floating"
+                  placeholder="08xxxxxxxxxx"
+                  type="number"
+                  inputmode="numeric"
+                  @keypress="onlyNumberInput"
+                ></ion-input>
+
+                <ion-button
+                  expand="block"
+                  class="ion-margin-top"
+                  @click="handleResetPassword"
+                >
+                  Kirim
+                </ion-button>
+              </ion-content>
+            </ion-modal>
             <!-- </ion-item> -->
             <br /><br />
             <p
               class="mt-10 text-center align-text-bottom text-xs font-normal text-gray-900"
             >
               <center>
-                © FAH Software 2025. All rights reserved.<br />Versi 0.2.1
+                © FAH Software 2025. All rights reserved.<br />Versi 0.2.3
               </center>
             </p>
           </ion-card-content>
@@ -89,6 +111,7 @@ import {
   IonIcon,
   IonSpinner,
   IonAlert,
+  IonModal,
 } from "@ionic/vue";
 import { eye, eyeOff } from "ionicons/icons";
 import { showToast } from "@/services/toastHandlers";
@@ -110,6 +133,7 @@ export default {
     IonIcon,
     IonSpinner,
     IonAlert,
+    IonModal,
   },
   setup() {
     const username = ref("");
@@ -117,9 +141,45 @@ export default {
     const showPassword = ref(false);
     const loading = ref(false);
     const router = useRouter();
+    const showResetModal = ref(false);
+    const whatsappNumber = ref("");
+    // const closeModal = ref(false);
 
     const togglePassword = () => {
       showPassword.value = !showPassword.value;
+    };
+
+    const closeModal = () => {
+      showResetModal.value = false;
+    };
+
+    const handleResetPassword = async () => {
+      loading.value = true;
+      try {
+        const response = await api.post("/reset-password", {
+          phone: whatsappNumber.value,
+        });
+        await showToast(response.data.message, "success");
+        console.log(response.data.message);
+        showResetModal.value = false;
+      } catch (error) {
+        if (error.response && error.response.data) {
+          await showToast(error.response.data.message, "danger");
+          loading.value = false;
+        } else {
+          await showToast("Terjadi kesalahan", "danger");
+          loading.value = false;
+        }
+      } finally {
+        loading.value = false;
+      }
+    };
+
+    const onlyNumberInput = async (e) => {
+      const charCode = e.key;
+      if (!/^[0-9]$/.test(charCode)) {
+        e.preventDefault();
+      }
     };
 
     const login = async () => {
@@ -164,55 +224,6 @@ export default {
       }
     };
 
-    const alertButtons = ref([
-      {
-        text: "Tidak",
-        role: "cancel",
-      },
-      {
-        text: "Ya",
-        handler: async () => {
-          resetPass();
-        },
-      },
-    ]);
-
-    const resetPass = async () => {
-      loading.value = true;
-      try {
-      } catch (error) {
-      } finally {
-        loading.value = false;
-      }
-    };
-
-    // const alertButtons = ['OK'];
-    const alertInputs = ref([
-      {
-        placeholder: "Username",
-      },
-      {
-        placeholder: "Nickname (max 8 characters)",
-        attributes: {
-          maxlength: 8,
-        },
-      },
-      {
-        type: "number",
-        placeholder: "Age",
-        min: 1,
-        max: 100,
-      },
-      {
-        type: "textarea",
-        placeholder: "A little about yourself",
-      },
-    ]);
-
-    const showLogoutConfirm = () => {
-      isAlertOpen.value = true;
-    };
-
     // Tombol di dalam dialog
 
     return {
@@ -224,6 +235,11 @@ export default {
       loading,
       eye,
       eyeOff,
+      showResetModal,
+      closeModal,
+      handleResetPassword,
+      whatsappNumber,
+      onlyNumberInput,
     };
   },
 };

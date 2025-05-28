@@ -210,12 +210,12 @@
       printRes2.value = JSON.parse(printRes.value);
       await showToast(printRes2.value.message, "success");
   
-      router.push("/");
+      router.replace("/");
       // absenTime.value = response.data.time_in; // Perbarui UI dengan waktu absen
     } catch (error) {
       console.error("Gagal absen:", error.response?.data || error.message);
       await showToast(error.response.data.message, "danger");
-      router.push("/");
+      router.replace("/");
     } finally {
       loading.value = false;
     }

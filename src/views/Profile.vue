@@ -239,7 +239,7 @@ const fetchUserProfile = async () => {
     const token = localStorage.getItem("access_token"); // Ambil token dari localStorage
     if (!token) {
       console.warn("⚠️ Token tidak ditemukan! Mengarahkan ke login...");
-      router.push("/login");
+      router.replace("/login");
       return;
     }
 
