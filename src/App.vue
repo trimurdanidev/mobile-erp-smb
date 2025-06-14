@@ -17,7 +17,7 @@ import { App as CapacitorApp } from "@capacitor/app";
 const isAlertOpen = ref(false);
 const storageUrl = import.meta.env.VITE_STORAGE_URL;
 const closeApp = async () => {
-  if (isPlatform("android")) {
+  // if (isPlatform("android")) {
     const alert = await alertController.create({
       header: "Konfirmasi",
       message: "Apakah Anda yakin ingin keluar dari aplikasi?",
@@ -35,7 +35,7 @@ const closeApp = async () => {
       ],
     });
     await alert.present();
-  }
+  // }
 };
 
 provide("storageUrl", storageUrl);

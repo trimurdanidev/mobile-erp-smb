@@ -90,6 +90,7 @@ import { showToast } from "@/services/toastHandlers";
 import { IonSpinner } from "@ionic/vue";
 import router from "@/router";
 import { alertController } from "@ionic/vue";
+import { Http } from "@capacitor-community/http";
 
 // State
 const hariIni = ref("");
@@ -184,12 +185,22 @@ const fetchData = async () => {
         async (position) => {
           latitude.value = position.coords.latitude;
           longitude.value = position.coords.longitude;
-          const response = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude.value}&lon=${longitude.value}`
-          );
-          const data = await response.json();
-          dataPosition.value = data.display_name;
-          //   await showToast(dataPosition.value, "success");
+          const response = await Http.get({
+            url: "https://nominatim.openstreetmap.org/reverse",
+            params: {
+              format: "jsonv2",
+              lat: latitude.value,
+              lon: longitude.value,
+            },
+            headers: {
+              "User-Agent": "erpsmb/2.3 (trimurdani78.tm@gmail.com)",
+            },
+          });
+
+          dataPosition.value = (await response).data.display_name;
+          await showToast(dataPosition.value, "success");
+          console.log(response.data);
+          loading.value = false;
         },
         (error) => {
           console.error("Gagal mengambil lokasi:", error.message);
@@ -313,6 +324,7 @@ onMounted(() => {
   getCurrentDateTime();
   getLocation();
   fetchData();
+
 
   // Aktifkan Kamera
   navigator.mediaDevices

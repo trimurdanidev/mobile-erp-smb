@@ -83,7 +83,7 @@
               class="mt-10 text-center align-text-bottom text-xs font-normal text-gray-900"
             >
               <center>
-                © FAH Software 2025. All rights reserved.<br />Versi 0.2.3
+                © FAH Software 2025. All rights reserved.<br />Versi 0.2.4
               </center>
             </p>
           </ion-card-content>
@@ -161,6 +161,7 @@ export default {
         });
         await showToast(response.data.message, "success");
         console.log(response.data.message);
+        whatsappNumber.value="";
         showResetModal.value = false;
       } catch (error) {
         if (error.response && error.response.data) {
@@ -208,7 +209,7 @@ export default {
         //clearForm
         username.value = "";
         password.value = "";
-        router.push("/");
+        router.replace("/");
         window.location.replace("/");
         await showToast(response.data.message, "success");
       } catch (error) {
