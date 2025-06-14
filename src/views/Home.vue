@@ -133,9 +133,9 @@ export default {
     const goTo = (menu) => {
       if (loadAbsensi) {
         RefreshData();
-        router.push(`/${menu}`);
+        router.replace(`/${menu}`);
       } else {
-        router.push(`/${menu}`);
+        router.replace(`/${menu}`);
       }
     };
 

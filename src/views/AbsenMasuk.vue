@@ -1,19 +1,21 @@
 <template>
   <ion-page>
     <ion-content color="full">
+      <ion-header>
+        <ion-toolbar>
+          <ion-title>Absen Masuk</ion-title>
+        </ion-toolbar>
+      </ion-header>
       <div class="content-container">
         <ion-refresher slot="fixed" @ionRefresh="handleRefresh">
           <ion-refresher-content></ion-refresher-content>
         </ion-refresher>
-        <ion-header>
-          <ion-toolbar>
-            <ion-title>Absen Masuk</ion-title>
-          </ion-toolbar>
-        </ion-header>
         <!-- Kartu Informasi -->
         <ion-card class="absen-card">
           <ion-card-header>
-            <ion-card-title>📅 {{ tanggalHariIni }}</ion-card-title>
+            <ion-card-title
+              >📅 {{ hariIni + ", " + tanggalHariIni }}</ion-card-title
+            >
           </ion-card-header>
           <!-- <ion-card-content>
           <p v-if="absenTime">✅ Anda sudah absen masuk jam {{ absenTime }}</p>
@@ -63,7 +65,7 @@
           </ion-button>
         </div>
       </div>
-      <ion-modal
+      <!-- <ion-modal
         :is-open="showModal"
         @didDismiss="closeModal"
         class="custom-modal"
@@ -76,7 +78,7 @@
           </p>
           <ion-button @click="showModal = false">OK</ion-button>
         </div>
-      </ion-modal>
+      </ion-modal> -->
     </ion-content>
   </ion-page>
 </template>
@@ -88,8 +90,10 @@ import { showToast } from "@/services/toastHandlers";
 import { IonSpinner } from "@ionic/vue";
 import router from "@/router";
 import { alertController } from "@ionic/vue";
+import { Http } from "@capacitor-community/http";
 
 // State
+const hariIni = ref("");
 const tanggalHariIni = ref("");
 const dateAbsen = ref("");
 const absenTime = ref(null);
@@ -112,6 +116,15 @@ const imageBase64 = ref(null);
 const keterangan = ref(null);
 const showModal = ref(false);
 const isRefreshing = ref(false);
+const hariList = [
+  "Minggu",
+  "Senin",
+  "Selasa",
+  "Rabu",
+  "Kamis",
+  "Jumat",
+  "Sabtu",
+];
 
 // 📌 1. Ambil Waktu & Tanggal Saat Ini
 const getCurrentDateTime = () => {
@@ -124,7 +137,9 @@ const getCurrentDateTime = () => {
   const seconds = String(now.getSeconds()).padStart(2, "0");
 
   tanggalHariIni.value = `${day}-${month}-${year}`;
+  hariIni.value = hariList[now.getDay()];
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  return hariIni;
 };
 
 const dateNow = () => {
@@ -170,12 +185,22 @@ const fetchData = async () => {
         async (position) => {
           latitude.value = position.coords.latitude;
           longitude.value = position.coords.longitude;
-          const response = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude.value}&lon=${longitude.value}`
-          );
-          const data = await response.json();
-          dataPosition.value = data.display_name;
-          //   await showToast(dataPosition.value, "success");
+          const response = await Http.get({
+            url: "https://nominatim.openstreetmap.org/reverse",
+            params: {
+              format: "jsonv2",
+              lat: latitude.value,
+              lon: longitude.value,
+            },
+            headers: {
+              "User-Agent": "erpsmb/2.3 (trimurdani78.tm@gmail.com)",
+            },
+          });
+
+          dataPosition.value = (await response).data.display_name;
+          await showToast(dataPosition.value, "success");
+          console.log(response.data);
+          loading.value = false;
         },
         (error) => {
           console.error("Gagal mengambil lokasi:", error.message);
@@ -225,7 +250,7 @@ const showSuccessAlert = async () => {
   const alert = await alertController.create({
     header: "Absensi Berhasil!",
     message:
-      "<img src='/thumbs-up.png'  width='100px' /><br>Terima kasih tetap semangat dan tingkatkan kinerja pekerjaanmu!",
+      "Terima kasih tetap semangat dan tingkatkan kinerja pekerjaanmu Ya Okeh!",
     buttons: ["OK"],
     cssClass: "custom-alert",
   });
@@ -274,7 +299,7 @@ const submitAbsen = async () => {
 
     // window.location.reload("/");
     // await showToast(printRes2.value.message, "success");
-    showModal.value = true;
+    showSuccessAlert();
     router.replace("/");
     // absenTime.value = response.data.time_in; // Perbarui UI dengan waktu absen
   } catch (error) {
@@ -299,6 +324,7 @@ onMounted(() => {
   getCurrentDateTime();
   getLocation();
   fetchData();
+
 
   // Aktifkan Kamera
   navigator.mediaDevices

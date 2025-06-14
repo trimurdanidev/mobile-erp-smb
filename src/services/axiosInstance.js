@@ -21,7 +21,7 @@ api.interceptors.response.use(
       localStorage.removeItem("user");
 
       // Redirect ke halaman login
-      router.push("/login");
+      router.replace("/login");
     }
     return Promise.reject(error);
   }
