@@ -125,6 +125,16 @@ const hariList = [
   "Jumat",
   "Sabtu",
 ];
+const user = ref(null);
+const baseLocation_lat = ref("");
+const baseLocation_long = ref("");
+const statusUser_base = ref("");
+const parsedUser = ref(null);
+const geterUser = ref(null);
+const nik = ref(null);
+const description = ref(null);
+const phone = ref(null);
+const department_name = ref(null);
 
 // 📌 1. Ambil Waktu & Tanggal Saat Ini
 const getCurrentDateTime = () => {
@@ -258,12 +268,96 @@ const showSuccessAlert = async () => {
   await alert.present();
 };
 
+const fetchUserPrepAbsen = async () => {
+  try {
+    const token = localStorage.getItem("access_token"); // Ambil token dari localStorage
+    if (!token) {
+      console.warn("⚠️ Token tidak ditemukan! Mengarahkan ke login...");
+      router.replace("/login");
+      return;
+    }
+
+    userData.value = JSON.parse(getUser);
+    const response = api.get("showByUser/" + userData.value.user, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    user.value = (await response).data; // Pastikan struktur API benar
+    parsedUser.value = JSON.stringify(user.value);
+    geterUser.value = JSON.parse(parsedUser.value);
+    phone.value = geterUser.value.data.phone;
+    nik.value = geterUser.value.data.nik;
+    description.value = geterUser.value.data.description;
+    department_name.value = geterUser.value.data.department_name;
+    user.value = geterUser.value.data.user;
+    baseLocation_lat.value = geterUser.value.data.base_location_lat;
+    baseLocation_long.value = geterUser.value.data.base_location_long;
+    statusUser_base.value = geterUser.value.data.is_mobile;
+    // showToast(statusUser_base.value,"success");
+  } catch (error) {
+    console.error(
+      "❌ Gagal mengambil data pengguna:",
+      error.response?.data || error
+    );
+    if (error.response?.status === 401) {
+      console.warn("⚠️ Token expired! Mengarahkan ke login...");
+      logout();
+    }
+  }
+};
+
+// Hitung jarak antar 2 koordinat (hasil dalam meter)
+function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371e3; // radius bumi dalam meter
+  const toRad = (deg) => (deg * Math.PI) / 180;
+
+  const φ1 = toRad(lat1);
+  const φ2 = toRad(lat2);
+  const Δφ = toRad(lat2 - lat1);
+  const Δλ = toRad(lon2 - lon1);
+
+  const a =
+    Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c; // meter
+}
+
 // 📌 4. Kirim Data Absen ke API
 const submitAbsen = async () => {
   loading.value = true;
   try {
     userData.value = JSON.parse(getUser);
     const token = localStorage.getItem("access_token");
+
+    // ambil base location dari user data (JSON)
+    const baseLat = parseFloat(baseLocation_lat.value);
+    const baseLong = parseFloat(baseLocation_long.value);
+    const userLat = parseFloat(latitude.value);
+    const userLong = parseFloat(longitude.value);
+
+    //Cek jarak
+    const distance = getDistanceFromLatLonInMeters(
+      userLat,
+      userLong,
+      baseLat,
+      baseLong
+    );
+    const maxRadius = 50; // misal 50 meter
+
+    if (distance > maxRadius &&  statusUser_base.value == 0) {
+      await showToast(
+        `GAGAL ABSEN\nLokasi Terlalu Jauh!\n Jarak anda ${Math.round(
+          distance
+        )}m Dari Tempat Kerja.`,
+        "danger"
+      );
+      loading.value = false;
+      return;
+    }
+
     const absenData = new FormData();
     const timestamp = new Date().getTime(); // Ambil waktu sekarang
     fileName.value = `IN_${userData.value.user}_${timestamp}.png`; // Nama file unik
@@ -324,7 +418,7 @@ onMounted(() => {
   getCurrentDateTime();
   getLocation();
   fetchData();
-
+  fetchUserPrepAbsen();
 
   // Aktifkan Kamera
   navigator.mediaDevices

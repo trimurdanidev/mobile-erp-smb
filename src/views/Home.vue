@@ -37,6 +37,18 @@
           Rekap Absensi
         </ion-button>
       </div>
+      <ion-grid no-padding>
+        <ion-row class="">
+          <ion-col class="">
+            <img src="@/assets/images/plumbing.png" />
+            <span>PLUMBING</span>
+          </ion-col>
+          <ion-col class="">
+            <img src="@/assets/images/paint-roller.png" />
+            <span>PAINT ROLLER</span>
+          </ion-col>
+        </ion-row>
+      </ion-grid>
     </ion-content>
   </ion-page>
 </template>
