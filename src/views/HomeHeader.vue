@@ -152,7 +152,7 @@ export default {
 <style scoped>
 .home-header {
   position: fixed; /* Tetap di atas */
-  top: 0;
+  top: -35px;
   width: 100%;
   z-index: 1000; /* Agar di atas elemen lain */
 }
@@ -160,7 +160,7 @@ export default {
 .absen-card {
   margin: 0px 0px 50px 0px; /* Margin kanan dan kiri tidak terlalu kecil */
   padding: 20px;
-  border-radius: 0px 0px 60px 60px; /* Membuat sudut card tidak terlalu lancip */
+  border-radius: 4px 4px 30px 30px; /* Membuat sudut card tidak terlalu lancip */
   box-shadow: 3px 4px 8px rgba(0, 0, 0, 0.1); /* Efek bayangan lembut */
   background-color: #2a3594; /* Warna latar belakang */
   text-align: left;
