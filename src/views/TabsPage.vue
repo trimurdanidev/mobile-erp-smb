@@ -73,14 +73,14 @@ const getUser = localStorage.getItem("master_user");
 
 const logout = async () => {
   try {
+    
+    // Redirect ke halaman login
+    router.replace("/login");
+    await showToast('Logout Berhasil. Sampai Bertemu Lagi!','primary');
     // Hapus token & data user dari localStorage
     localStorage.removeItem("access_token");
     localStorage.removeItem("master_user");
     localStorage.clear();
-
-    // Redirect ke halaman login
-    await showToast('Logout Berhasil. Sampai Bertemu Lagi!','primary');
-    router.replace("/login");
   } catch (error) {
     console.error("Logout gagal:", error);
     await showToast("Terjadi Kesalahan Sistem", "danger");
