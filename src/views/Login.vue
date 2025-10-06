@@ -83,7 +83,7 @@
               class="mt-10 text-center align-text-bottom text-xs font-normal text-gray-900"
             >
               <center>
-                © FAH Software 2025. All rights reserved.<br />Versi 0.2.6
+                © FAH Software 2025. All rights reserved.<br />Versi 0.2.7
               </center>
             </p>
           </ion-card-content>

@@ -38,7 +38,8 @@
           <!-- <div class="content-container"> -->
           <ion-item>
             <!-- <ion-spinner v-if="loading"></ion-spinner> -->
-            <ion-label position="stacked"
+            <ion-spinner v-if="loading"></ion-spinner>
+            <ion-label v-else position="stacked"
               >📍 Lokasi: {{ dataPosition }}</ion-label
             >
           </ion-item>
@@ -173,10 +174,12 @@ const time = () => {
 // 📌 2. Ambil Lokasi GPS
 const getLocation = () => {
   if ("geolocation" in navigator) {
+    loading.value = true;
     navigator.geolocation.getCurrentPosition(
       (position) => {
         latitude.value = position.coords.latitude;
         longitude.value = position.coords.longitude;
+        loading.value = false;
       },
       (error) => {
         console.error("Gagal mengambil lokasi:", error.message);
@@ -347,11 +350,11 @@ const submitAbsen = async () => {
     );
     const maxRadius = 50; // misal 50 meter
 
-    if (distance > maxRadius &&  statusUser_base.value == 0) {
+    if (distance > maxRadius && statusUser_base.value == 0) {
       await showToast(
-        `GAGAL ABSEN\nLokasi Terlalu Jauh!\n Jarak anda ${Math.round(
+        `Lokasi Terlalu Jauh!\n Jarak anda ${Math.round(
           distance
-        )}m Dari Tempat Kerja.`,
+        )}M Dari Tempat Kerja.`,
         "danger"
       );
       loading.value = false;
