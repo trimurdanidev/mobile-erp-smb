@@ -152,7 +152,7 @@ export default {
 <style scoped>
 .home-header {
   position: fixed; /* Tetap di atas */
-  top: -35px;
+  top: -20px;
   width: 100%;
   z-index: 1000; /* Agar di atas elemen lain */
 }

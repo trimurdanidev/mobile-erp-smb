@@ -63,14 +63,14 @@
                 <ion-label>#</ion-label>
                 <ion-label>Nama</ion-label>
                 <ion-label>Avg Absen</ion-label>
-                <ion-label>Total</ion-label>
+                <ion-label>Bagian</ion-label>
               </ion-item>
               <ion-list>
                 <ion-item v-for="(item, index) in dataArray" :key="index">
                   <ion-label>{{ index+1 }}</ion-label>
                   <ion-label>{{ item.namaKaryawan }} </ion-label>
                   <ion-label>{{ item.rataJamMasuk }}</ion-label>
-                  <ion-label>{{ item.jumlahHariMasuk }}</ion-label>
+                  <ion-label>{{ item.bagian }}</ion-label>
                 </ion-item>
               </ion-list>
             </div>
