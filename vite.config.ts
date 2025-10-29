@@ -24,7 +24,13 @@ export default defineConfig({
       key: fs.readFileSync("/etc/nginx/certs/erpsmb.key"),
       cert: fs.readFileSync("/etc/nginx/certs/ssl_bundle.crt"),
     },
-    // allowedHosts: ["erpsmb.cloud"],
-    // allowedHosts: true,
+    proxy: {
+      // with options: http://localhost:5173/api/bar-> http://jsonplaceholder.typicode.com/bar
+      '/api': {
+        target: 'http://202.10.42.150:8080/',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+      },
+
   },
 });
