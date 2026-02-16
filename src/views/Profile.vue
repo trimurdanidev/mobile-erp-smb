@@ -471,17 +471,31 @@ const closeModalProfile = () => {
 
 const changePassword = async () => {
   await showLoading();
-  if (newPassword.value !== confirmPassword.value) {
+
+  if (!newPassword.value || !confirmPassword.value) {
     await hideLoading();
-    alert("New password and confirm password do not match!");
+    await showToast("Password baru dan konfirmasi wajib diisi!", "warning");
     return;
   }
+
+  if (newPassword.value !== confirmPassword.value) {
+    await hideLoading();
+    await showToast("Password baru dan konfirmasi tidak cocok!", "danger");
+    return;
+  }
+
+  if (newPassword.value.length < 6) {
+    await hideLoading();
+    await showToast("Password minimal harus 6 karakter!", "warning");
+    return;
+  }
+
   try {
     await api.put("/update/" + userData.value.id, {
       password: newPassword.value,
     });
     await hideLoading();
-    await showToast("Password changed successfully!", "success");
+    await showToast("Berhasil Ganti Password", "success");
   } catch (error) {
     await hideLoading();
     await showToast(error.response.data.message, "danger");
@@ -547,6 +561,7 @@ const onFileChange = async (event) => {
 <style scoped>
 ion-content {
   --background: #f0f4f8;
+  background: #1e3a8a 0%, #2563eb 100%;
 }
 .profile-wrapper {
   display: flex;
@@ -756,6 +771,7 @@ ion-content {
   --background: #fff;
   --border-color: transparent;
   padding: 0;
+  padding-top: 1%;
   box-shadow: 0 1px 0 #f1f5f9;
 }
 .modal-header-inner {
@@ -781,6 +797,7 @@ ion-content {
   font-weight: 800;
   color: #1e293b;
   letter-spacing: -0.3px;
+  
 }
 .modal-close-btn {
   width: 34px;

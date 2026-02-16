@@ -86,7 +86,7 @@
           </div>
 
           <!-- Footer -->
-          <p class="footer-text">© FAH Software 2025. All rights reserved.<br />Versi 2.0.0</p>
+          <p class="footer-text">© FAH Software 2025. All rights reserved.<br />Versi 2.0.1</p>
         </div>
 
       </div>
