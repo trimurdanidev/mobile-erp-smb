@@ -174,6 +174,7 @@ export default {
 /* ─── Wrapper ───────────────────────────────────── */
 .home-header {
   width: 100%;
+  padding-top: 6%;
   background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
   /* HAPUS position: sticky, top: 0, z-index */
 }

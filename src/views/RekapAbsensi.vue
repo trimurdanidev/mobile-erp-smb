@@ -16,7 +16,6 @@
 
     <ion-content :fullscreen="false">
       <div class="rekap-wrapper">
-
         <!-- ── Filter Card ──────────────────────────── -->
         <div class="filter-card">
           <div class="filter-card-header">
@@ -27,15 +26,28 @@
           <!-- Dari Tanggal -->
           <div class="date-row" @click="showPopover = true">
             <div class="date-row-left">
-              <ion-icon :icon="calendarNumberOutline" class="date-icon date-start"></ion-icon>
+              <ion-icon
+                :icon="calendarNumberOutline"
+                class="date-icon date-start"
+              ></ion-icon>
               <div class="date-text-block">
                 <span class="date-label">Dari Tanggal</span>
-                <span class="date-value" :class="{ 'date-placeholder': !selectedDate }">
-                  {{ selectedDate ? formatDate(selectedDate) : "Pilih tanggal awal" }}
+                <span
+                  class="date-value"
+                  :class="{ 'date-placeholder': !selectedDate }"
+                >
+                  {{
+                    selectedDate
+                      ? formatDate(selectedDate)
+                      : "Pilih tanggal awal"
+                  }}
                 </span>
               </div>
             </div>
-            <ion-icon :icon="chevronForwardOutline" class="chevron-icon"></ion-icon>
+            <ion-icon
+              :icon="chevronForwardOutline"
+              class="chevron-icon"
+            ></ion-icon>
           </div>
 
           <!-- Popover Dari -->
@@ -52,7 +64,9 @@
                 presentation="date"
                 v-model="selectedDate"
               ></ion-datetime>
-              <ion-button expand="block" size="small" @click="confirmDate">OK</ion-button>
+              <ion-button expand="block" size="small" @click="confirmDate"
+                >OK</ion-button
+              >
             </ion-content>
           </ion-popover>
 
@@ -61,15 +75,28 @@
           <!-- Sampai Tanggal -->
           <div class="date-row" @click="showPopover2 = true">
             <div class="date-row-left">
-              <ion-icon :icon="calendarNumberOutline" class="date-icon date-end"></ion-icon>
+              <ion-icon
+                :icon="calendarNumberOutline"
+                class="date-icon date-end"
+              ></ion-icon>
               <div class="date-text-block">
                 <span class="date-label">Sampai Tanggal</span>
-                <span class="date-value" :class="{ 'date-placeholder': !selectedDateEnd }">
-                  {{ selectedDateEnd ? formatDate(selectedDateEnd) : "Pilih tanggal akhir" }}
+                <span
+                  class="date-value"
+                  :class="{ 'date-placeholder': !selectedDateEnd }"
+                >
+                  {{
+                    selectedDateEnd
+                      ? formatDate(selectedDateEnd)
+                      : "Pilih tanggal akhir"
+                  }}
                 </span>
               </div>
             </div>
-            <ion-icon :icon="chevronForwardOutline" class="chevron-icon"></ion-icon>
+            <ion-icon
+              :icon="chevronForwardOutline"
+              class="chevron-icon"
+            ></ion-icon>
           </div>
 
           <!-- Popover Sampai -->
@@ -86,9 +113,47 @@
                 v-model="selectedDateEnd"
                 @ionChange="showPopover2 = false"
               ></ion-datetime>
-              <ion-button expand="block" size="small" @click="confirmDate2">OK</ion-button>
+              <ion-button expand="block" size="small" @click="confirmDate2"
+                >OK</ion-button
+              >
             </ion-content>
           </ion-popover>
+
+          <div
+            v-if="getUserData2 && getUserData2.length > 0"
+            class="employee-filter-container"
+          >
+            <div class="date-divider"></div>
+
+            <ion-item lines="none" class="custom-employee-item">
+              <div slot="start" class="icon-wrapper">
+                <ion-icon
+                  :icon="listOutline"
+                  class="emp-select-icon"
+                ></ion-icon>
+              </div>
+
+              <ion-label position="stacked" class="custom-label"
+                >Pilih Karyawan</ion-label
+              >
+
+              <ion-select
+                v-model="selectedUser"
+                interface="alert"
+                placeholder="Pilih Nama Karyawan"
+                toggle-icon="chevron-down-outline"
+                class="full-width-select"
+              >
+                <ion-select-option
+                  v-for="u in getUserData2"
+                  :key="u.id"
+                  :value="u.user"
+                >
+                  {{ u.username }}
+                </ion-select-option>
+              </ion-select>
+            </ion-item>
+          </div>
 
           <!-- Tombol Lihat -->
           <button
@@ -97,7 +162,11 @@
             @click="loadAbsensiRange"
             :disabled="loading"
           >
-            <ion-spinner v-if="loading" name="crescent" class="lihat-spinner"></ion-spinner>
+            <ion-spinner
+              v-if="loading"
+              name="crescent"
+              class="lihat-spinner"
+            ></ion-spinner>
             <template v-else>
               <ion-icon :icon="searchOutline" class="lihat-icon"></ion-icon>
               Lihat Rekap
@@ -106,7 +175,10 @@
         </div>
 
         <!-- ── Result Header ──────────────────────── -->
-        <div v-if="absensi.data && absensi.data.length > 0" class="result-header">
+        <div
+          v-if="absensi.data && absensi.data.length > 0"
+          class="result-header"
+        >
           <div class="result-title-row">
             <ion-icon :icon="listOutline" class="result-icon"></ion-icon>
             <span class="result-title">Rekap Data Absen</span>
@@ -118,7 +190,10 @@
         </div>
 
         <!-- ── Empty State ────────────────────────── -->
-        <div v-else-if="absensi.data && absensi.data.length === 0" class="empty-state">
+        <div
+          v-else-if="absensi.data && absensi.data.length === 0"
+          class="empty-state"
+        >
           <ion-icon :icon="documentOutline" class="empty-icon"></ion-icon>
           <p class="empty-text">Tidak ada data absensi</p>
           <span class="empty-sub">Coba ubah rentang tanggal</span>
@@ -141,19 +216,31 @@
 
               <!-- Detail rows -->
               <div class="absen-detail-row">
-                <ion-icon :icon="calendarClearOutline" class="detail-icon"></ion-icon>
+                <ion-icon
+                  :icon="calendarClearOutline"
+                  class="detail-icon"
+                ></ion-icon>
                 <span>{{ absen.date }}</span>
               </div>
               <div class="absen-detail-row">
-                <ion-icon :icon="timeOutline" class="detail-icon time-color"></ion-icon>
+                <ion-icon
+                  :icon="timeOutline"
+                  class="detail-icon time-color"
+                ></ion-icon>
                 <span><strong>Masuk:</strong> {{ absen.time_in }}</span>
               </div>
               <div class="absen-detail-row" v-if="absen.absensi_ref">
-                <ion-icon :icon="chatboxOutline" class="detail-icon note-color"></ion-icon>
+                <ion-icon
+                  :icon="chatboxOutline"
+                  class="detail-icon note-color"
+                ></ion-icon>
                 <span>{{ absen.absensi_ref }}</span>
               </div>
               <div class="absen-detail-row loc-row" v-if="absen.address_in">
-                <ion-icon :icon="locationOutline" class="detail-icon loc-color"></ion-icon>
+                <ion-icon
+                  :icon="locationOutline"
+                  class="detail-icon loc-color"
+                ></ion-icon>
                 <span class="loc-text">{{ absen.address_in }}</span>
               </div>
             </div>
@@ -168,13 +255,12 @@
             </div>
           </div>
         </div>
-
       </div>
     </ion-content>
   </ion-page>
 </template>
 
-<script setup>
+  <script setup>
 import { ref, onMounted } from "vue";
 import axios from "axios";
 import {
@@ -198,6 +284,8 @@ import {
   IonPopover,
   IonText,
   IonSpinner,
+  IonSelect,
+  IonSelectOption,
 } from "@ionic/vue";
 import {
   arrowBackOutline,
@@ -220,6 +308,7 @@ const absensi = ref([]);
 const rekap = ref(null);
 const getUser = localStorage.getItem("master_user");
 const userData = ref([]);
+const getUserData2 = ref([]);
 const page = ref(1);
 const hasMoreData = ref(true);
 const storageUrl = inject("storageUrl");
@@ -229,6 +318,8 @@ const selectedDate = ref(null);
 const selectedDateEnd = ref(null);
 const datetimeRef = ref("");
 const loading = ref(false);
+const userList = ref([]);
+const selectedUser = ref("");
 
 const formatDate = (dateStr) => {
   const date = new Date(dateStr);
@@ -291,40 +382,53 @@ const loadMoreData = async (event) => {
 };
 
 const loadAbsensiRange = async () => {
-  if (!selectedDate.value) {
-    showToast("Dari Tanggal Belum Dipilih", "danger");
-  } else if (!selectedDateEnd.value) {
-    showToast("Sampai Tanggal Belum Dipilih", "danger");
-  } else {
-    loading.value = true;
-    try {
-      userData.value = JSON.parse(getUser);
-      const response = api.get(
-        "/getAbsenRekap/" +
-          userData.value.user +
-          "/" +
-          dateSetApi(selectedDate.value) +
-          "/" +
-          dateSetApi(selectedDateEnd.value)
-      );
-      absensi.value = (await response).data;
+  if (!selectedDate.value || !selectedDateEnd.value) {
+    showToast("Rentang tanggal harus dipilih", "danger");
+    return;
+  }
 
-      if (absensi.length > 0) {
-        absensi.value.push(...absensi);
-        page.value++;
-      } else {
-        hasMoreData.value = false;
-      }
-      showToast(absensi.value.message, "success");
-    } catch (error) {
-      console.error("Gagal mengambil data absensi:", error);
-    } finally {
-      loading.value = false;
-    }
+  // Jika Manager tidak pilih user di dropdown, default ke dirinya sendiri
+  const targetUser = selectedUser.value || userData.value.user;
+
+  loading.value = true;
+  try {
+    const response = await api.get(
+      `/getAbsenRekap/${targetUser}/${dateSetApi(
+        selectedDate.value
+      )}/${dateSetApi(selectedDateEnd.value)}`
+    );
+    absensi.value = response.data;
+    showToast(absensi.value.message, "success");
+  } catch (error) {
+    console.error("Gagal mengambil data absensi:", error);
+    showToast("Gagal memuat data", "danger");
+  } finally {
+    loading.value = false;
   }
 };
 
-onMounted(() => {});
+const loadAllUsers = async () => {
+  try {
+    const response = await api.get("/showAll");
+    // userList.value = JSON.stringify(response.data);
+    // getUserData2.value = JSON.parse(userList.value);
+    getUserData2.value = response.data.data;
+    console.log(response.data.message, getUserData2.value);
+  } catch (error) {
+    console.error("Gagal mengambil daftar karyawan:", error);
+  }
+};
+
+onMounted(() => {
+  userData.value = JSON.parse(getUser);
+  if (
+    userData.value.department_name === "Owner" ||
+    userData.value.department_name === "Manager"
+  ) {
+    loadAllUsers();
+  }
+  console.log(userData.value.department_name);
+});
 </script>
 
 <style scoped>
@@ -335,18 +439,21 @@ onMounted(() => {});
   box-shadow: none !important;
   border: none !important;
 }
-.rekap-app-header::after { display: none !important; }
+.rekap-app-header::after {
+  display: none !important;
+}
 
 .rekap-toolbar {
   --background: transparent;
   --border-color: transparent;
   --padding-top: 4px;
   --padding-bottom: 4px;
+  padding-top: 5%;
 }
 
 .back-btn {
-  --color: rgba(255,255,255,0.85);
-  --background: rgba(255,255,255,0.12);
+  --color: rgba(255, 255, 255, 0.85);
+  --background: rgba(255, 255, 255, 0.12);
   --border-radius: 10px;
   --padding-start: 8px;
   --padding-end: 8px;
@@ -369,7 +476,7 @@ onMounted(() => {});
 
 .toolbar-subtitle {
   font-size: 11px;
-  color: rgba(255,255,255,0.6);
+  color: rgba(255, 255, 255, 0.6);
   font-weight: 500;
 }
 
@@ -390,7 +497,7 @@ ion-content {
   background: #ffffff;
   border-radius: 20px;
   overflow: hidden;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
 }
 
 .filter-card-header {
@@ -425,7 +532,9 @@ ion-content {
   transition: background 0.15s;
   -webkit-tap-highlight-color: transparent;
 }
-.date-row:active { background: #f8fafc; }
+.date-row:active {
+  background: #f8fafc;
+}
 
 .date-row-left {
   display: flex;
@@ -440,8 +549,14 @@ ion-content {
   flex-shrink: 0;
 }
 
-.date-start { color: #2563eb; background: #eff6ff; }
-.date-end   { color: #7c3aed; background: #f5f3ff; }
+.date-start {
+  color: #2563eb;
+  background: #eff6ff;
+}
+.date-end {
+  color: #7c3aed;
+  background: #f5f3ff;
+}
 
 .date-text-block {
   display: flex;
@@ -495,16 +610,27 @@ ion-content {
   border: none;
   border-radius: 14px;
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(37,99,235,0.28);
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.28);
   transition: transform 0.15s ease;
   -webkit-tap-highlight-color: transparent;
   box-sizing: border-box;
 }
-.lihat-btn:active:not(.lihat-btn-loading) { transform: scale(0.97); }
-.lihat-btn-loading { opacity: 0.75; cursor: not-allowed; }
+.lihat-btn:active:not(.lihat-btn-loading) {
+  transform: scale(0.97);
+}
+.lihat-btn-loading {
+  opacity: 0.75;
+  cursor: not-allowed;
+}
 
-.lihat-icon { font-size: 18px; }
-.lihat-spinner { --color: #ffffff; width: 18px; height: 18px; }
+.lihat-icon {
+  font-size: 18px;
+}
+.lihat-spinner {
+  --color: #ffffff;
+  width: 18px;
+  height: 18px;
+}
 
 /* ─── Result Header ─────────────────────────────── */
 .result-header {
@@ -557,9 +683,21 @@ ion-content {
   gap: 8px;
 }
 
-.empty-icon { font-size: 44px; color: #cbd5e1; }
-.empty-text { font-size: 15px; font-weight: 700; color: #64748b; margin: 0; }
-.empty-sub  { font-size: 12px; color: #94a3b8; margin: 0; }
+.empty-icon {
+  font-size: 44px;
+  color: #cbd5e1;
+}
+.empty-text {
+  font-size: 15px;
+  font-weight: 700;
+  color: #64748b;
+  margin: 0;
+}
+.empty-sub {
+  font-size: 12px;
+  color: #94a3b8;
+  margin: 0;
+}
 
 /* ─── Absensi List ──────────────────────────────── */
 .absen-list {
@@ -572,7 +710,7 @@ ion-content {
   background: #ffffff;
   border-radius: 18px;
   padding: 14px 14px 14px 16px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
   display: flex;
   gap: 12px;
   align-items: flex-start;
@@ -626,11 +764,19 @@ ion-content {
   margin-top: 1px;
 }
 
-.time-color { color: #2563eb; }
-.note-color { color: #7c3aed; }
-.loc-color  { color: #16a34a; }
+.time-color {
+  color: #2563eb;
+}
+.note-color {
+  color: #7c3aed;
+}
+.loc-color {
+  color: #16a34a;
+}
 
-.loc-row { align-items: flex-start; }
+.loc-row {
+  align-items: flex-start;
+}
 
 .loc-text {
   line-height: 1.4;
@@ -649,5 +795,71 @@ ion-content {
   border-radius: 12px;
   object-fit: cover;
   border: 2px solid #f1f5f9;
+}
+
+/* Container Utama */
+.employee-filter-container {
+  background: #ffffff;
+}
+
+/* Item Wrapper */
+.custom-employee-item {
+  --padding-start: 16px;
+  --padding-end: 16px;
+  --inner-padding-end: 0;
+  --background: transparent;
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+/* Icon Styling */
+.icon-wrapper {
+  background: #eff6ff; /* Biru sangat muda */
+  padding: 8px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 12px;
+}
+
+.emp-select-icon {
+  font-size: 20px;
+  color: #2563eb; /* Warna biru primer */
+}
+
+/* Label Kecil di Atas Select */
+.custom-label {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: #94a3b8 !important; /* Abu-abu muted */
+  letter-spacing: 0.5px;
+  text-transform: titlecase;
+  margin-bottom: 4px !important;
+}
+
+/* Select Styling */
+.full-width-select {
+  width: 100%;
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b; /* Biru gelap kehitaman */
+  padding: 0;
+  --placeholder-color: #cbd5e1;
+  --placeholder-opacity: 1;
+}
+
+/* Menyesuaikan panah dropdown agar kecil dan elegan */
+.full-width-select::part(icon) {
+  font-size: 14px;
+  color: #94a3b8;
+  opacity: 0.8;
+}
+
+/* Garis pembatas antar filter */
+.date-divider {
+  height: 1px;
+  background: #f1f5f9;
+  margin: 0 16px;
 }
 </style>

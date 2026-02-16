@@ -454,6 +454,7 @@ onMounted(() => {
   --border-color: transparent;
   --padding-top: 4px;
   --padding-bottom: 4px;
+  padding-top: 5%;
 }
 
 .back-btn {

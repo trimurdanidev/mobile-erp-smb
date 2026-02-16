@@ -95,6 +95,7 @@ ion-tab-bar {
   --background: #ffffff;
   --border: none;
   padding: 8px 8px 12px;
+  padding-bottom: 10%;
   height: 68px;
   box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
   border-top: 1px solid #f1f5f9;
@@ -168,7 +169,6 @@ ion-tab-button:active .tab-icon-wrap {
 }
 </style>
 
-<!-- Style global untuk alertController — tidak bisa scoped -->
 <style>
 /* ─── Logout Alert ──────────────────────────────── */
 .logout-alert .alert-wrapper {
