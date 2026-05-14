@@ -26,7 +26,6 @@
             </div>
             <span class="action-title">Absen Masuk</span>
           </button>
-
           <!-- Rekap Absensi -->
           <button
             class="action-card"
@@ -37,6 +36,17 @@
               <ion-icon :icon="documentTextOutline"></ion-icon>
             </div>
             <span class="action-title">Rekap Absensi</span>
+          </button>
+          <!-- Jadwal Kerja -->
+          <button
+            class="action-card"
+            @click="goTo('jadwal')"
+            aria-label="Jadwal Kerja"
+          >
+            <div class="action-icon-wrap jadwal-icon-bg">
+              <ion-icon :icon="calendarOutline"></ion-icon>
+            </div>
+            <span class="action-title">Jadwal Kerja</span>
           </button>
 
           <!-- ERP SMB Web -->
@@ -130,6 +140,7 @@ import {
   starOutline,
   peopleOutline,
   globeOutline,
+  calendarOutline,
 } from "ionicons/icons";
 import { onMounted, ref } from "vue";
 import api from "@/services/api";
@@ -298,6 +309,7 @@ export default {
       dataArray,
       tamBulan,
       tahun,
+      calendarOutline,
     };
   },
 };
@@ -362,7 +374,7 @@ ion-content::part(scroll) {
 .action-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  gap: 8px;
 }
 
 /* Card normal (2 kolom) */
@@ -674,9 +686,39 @@ ion-content::part(scroll) {
   .table-head,
   .table-row {
     grid-template-columns: 30px 1fr 78px 64px;
-    padding-left: 12px;
-    padding-right: 12px;
+    padding-left: 10px;
+    padding-right: 10px;
   }
+}
+
+.action-card {
+  padding: 14px 10px 12px;  /* ← dari 20px 12px 16px */
+  gap: 7px;                  /* ← dari 10px */
+}
+
+/* Perkecil icon wrap */
+.action-icon-wrap {
+  width: 48px;   /* ← dari 60px */
+  height: 48px;  /* ← dari 60px */
+  border-radius: 14px; /* ← dari 18px */
+}
+
+.action-icon-wrap ion-icon {
+  font-size: 22px; /* ← dari 28px */
+}
+
+/* Perkecil ERP Web card */
+.action-card-wide {
+  padding: 13px 16px; /* ← dari 18px 20px */
+  gap: 12px;          /* ← dari 16px */
+}
+
+.action-card-wide .action-title {
+  font-size: 14px; /* ← dari 15px */
+}
+
+.jadwal-icon-bg {
+  background: linear-gradient(135deg, #10b981, #059669);
 }
 </style>
 

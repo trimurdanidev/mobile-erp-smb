@@ -86,7 +86,7 @@
           </div>
 
           <!-- Footer -->
-          <p class="footer-text">© FAH Software 2025. All rights reserved.<br />Versi 2.0.1</p>
+          <p class="footer-text">© FAH Software 2025. All rights reserved.<br />Versi 2.0.2</p>
         </div>
 
       </div>
@@ -263,9 +263,12 @@ export default {
           password: password.value,
         });
 
-        localStorage.setItem("access_token", response.data.access_token);
+        const expiredAt = new Date().getTime() + (response.data.expires_in * 1000);
         const masterUser = response.data.master_user;
+
+        localStorage.setItem("access_token", response.data.access_token);
         localStorage.setItem("master_user", JSON.stringify(masterUser));
+        localStorage.setItem("token_expires_at", expiredAt.toString()); 
 
         username.value = "";
         password.value = "";
