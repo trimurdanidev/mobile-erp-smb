@@ -457,15 +457,6 @@ onMounted(() => {
   padding-top: 5%;
 }
 
-.back-btn {
-  --color: rgba(255, 255, 255, 0.85);
-  --background: rgba(255, 255, 255, 0.12);
-  --border-radius: 10px;
-  --padding-start: 8px;
-  --padding-end: 8px;
-  margin-left: 4px;
-}
-
 .toolbar-title-block {
   display: flex;
   flex-direction: column;

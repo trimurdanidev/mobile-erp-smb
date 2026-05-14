@@ -6,31 +6,23 @@ import AbsenMasuk from '../views/AbsenMasuk.vue';
 import AbsenPulang from '../views/AbsenPulang.vue';
 import RekapAbsen from '../views/RekapAbsensi.vue';
 import TabsPage from '../views/TabsPage.vue';
+import JadwalKerja from '../views/JadwalKerja.vue';
 import { constructOutline } from 'ionicons/icons';
-
 
 const routes: Array<RouteRecordRaw> = [
   {
     path: '/',
     redirect: '/home',
-    meta: {
-      title: "Login",
-    },
-    // redirect: '/TabsPage'
-  },
-  {
-    path: '/home',
-    name : 'home',
-    component: Home
   },
   {
     path: '/login',
-    name: "login",
+    name: 'login',
     component: Login
   },
   {
     path: '/',
     component: TabsPage,
+    meta: { requiresAuth: true },
     children: [
       {
         path: '/tabs',
@@ -47,7 +39,6 @@ const routes: Array<RouteRecordRaw> = [
       },
       {
         path: '/in',
-        // name: AbsenMasuk,
         component: AbsenMasuk
       },
       {
@@ -59,26 +50,46 @@ const routes: Array<RouteRecordRaw> = [
         component: RekapAbsen
       },
       {
+        path: '/jadwal',
+        component: JadwalKerja
+      },
+      {
         path: '/logout',
         component: () => import('../views/Login.vue')
       }
     ]
   },
-]
+];
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes
 })
 
-const token = localStorage.getItem("access_token");
-console.log(token,'');
+// Route Guard
 router.beforeEach((to, from, next) => {
+  const token     = localStorage.getItem("access_token");
+  const expiredAt = localStorage.getItem("token_expires_at");
 
-  if (!token && to.path !== "/login") {
-    next({ name: "login" }); // nama route benar
+  const isTokenExpired = !token || !expiredAt 
+                         || new Date().getTime() >= parseInt(expiredAt);
+
+  const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
+
+  if (requiresAuth && isTokenExpired) {
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("token_expires_at");
+    localStorage.removeItem("master_user");
+
+    console.warn("⛔ Session expired, redirect ke login");
+    next({ name: "login" });
+
+  } else if (to.name === "login" && token && !isTokenExpired) {
+    next({ name: "home" });
+
   } else {
     next();
   }
 });
-export default router
+
+export default router;
