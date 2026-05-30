@@ -1,6 +1,5 @@
 <template>
   <ion-page>
-    <!-- Header -->
     <ion-header class="absen-app-header" :translucent="false">
       <ion-toolbar class="absen-toolbar">
         <ion-buttons slot="start">
@@ -18,35 +17,49 @@
     </ion-header>
 
     <ion-content :fullscreen="false">
-      <ion-refresher slot="fixed" @ionRefresh="handleRefresh">
+      <!-- <ion-refresher slot="fixed" @ionRefresh="handleRefresh">
         <ion-refresher-content
           pulling-icon="chevron-down-circle-outline"
           refreshing-spinner="crescent"
         ></ion-refresher-content>
-      </ion-refresher>
+      </ion-refresher> -->
 
       <div class="absen-wrapper">
-        <!-- ── Camera Section ─────────────────────── -->
         <div class="camera-card">
           <div class="camera-label">
             <ion-icon :icon="videocamOutline" class="cam-icon"></ion-icon>
             <span>Kamera Selfie</span>
           </div>
           <div class="video-wrap">
-            <video ref="videoElement" autoplay class="video-feed"></video>
-            <canvas ref="canvasElement" style="display: none"></canvas>
+            <img
+              v-if="selfieTaken"
+              :src="selfieImage"
+              class="video-feed"
+              alt="Preview Selfie"
+            />
+            <div v-else class="camera-placeholder">
+              <div class="cam-pulse-ring"></div>
+              <div class="cam-circle">
+                <ion-icon
+                  :icon="cameraOutline"
+                  class="placeholder-icon"
+                ></ion-icon>
+              </div>
+              <p class="cam-placeholder-text">Belum ada foto yang diambil</p>
+              <span class="cam-hint-badge">Tap "Buka Kamera" untuk mulai</span>
+            </div>
+
             <div v-if="selfieTaken" class="selfie-taken-badge">
               <ion-icon :icon="checkmarkCircleOutline"></ion-icon>
               Selfie diambil
             </div>
           </div>
-          <button class="selfie-btn" @click="takeSelfie">
+          <button class="selfie-btn" @click="takeSelfieNative">
             <ion-icon :icon="cameraOutline" class="selfie-btn-icon"></ion-icon>
-            Ambil Selfie
+            {{ selfieTaken ? "Ambil Ulang Selfie" : "Buka Kamera" }}
           </button>
         </div>
 
-        <!-- ── Location Card ──────────────────────── -->
         <div class="info-card">
           <div class="info-card-header">
             <ion-icon
@@ -54,19 +67,21 @@
               class="info-card-icon loc-color"
             ></ion-icon>
             <span class="info-card-title">Lokasi Saat Ini</span>
-            <div v-if="loading" class="loading-dot-wrap">
+            <div v-if="loadingLoc" class="loading-dot-wrap">
               <ion-spinner name="dots" class="loc-spinner"></ion-spinner>
             </div>
           </div>
-          <p class="loc-text" v-if="!loading && dataPosition">
+          <p class="loc-text" v-if="!loadingLoc && dataPosition">
             {{ dataPosition }}
           </p>
-          <p class="loc-text loc-placeholder" v-else-if="!loading">
-            Mengambil lokasi…
+          <p
+            class="loc-text loc-placeholder"
+            v-else-if="!loadingLoc && !dataPosition"
+          >
+            Belum bisa mengambil lokasi. Coba refresh.
           </p>
         </div>
 
-        <!-- ── Keterangan Input ────────────────────── -->
         <div class="info-card">
           <div class="info-card-header">
             <ion-icon
@@ -85,7 +100,6 @@
           </div>
         </div>
 
-        <!-- ── Submit Button ──────────────────────── -->
         <button
           class="hadir-btn"
           :class="{ 'hadir-btn-disabled': !selfieTaken || loading }"
@@ -118,7 +132,6 @@ import {
   IonPage,
   IonHeader,
   IonToolbar,
-  IonTitle,
   IonContent,
   IonButton,
   IonButtons,
@@ -126,9 +139,6 @@ import {
   IonSpinner,
   IonRefresher,
   IonRefresherContent,
-  IonItem,
-  IonInput,
-  IonLabel,
   alertController,
 } from "@ionic/vue";
 import {
@@ -142,31 +152,27 @@ import {
 } from "ionicons/icons";
 import router from "@/router";
 import { Http } from "@capacitor-community/http";
+import { Geolocation } from "@capacitor/geolocation";
+
+// ── Import Capacitor Camera ──
+import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
 
 // ── State ─────────────────────────────────────────
 const hariIni = ref("");
 const tanggalHariIni = ref("");
-const dateAbsen = ref("");
-const absenTime = ref(null);
 const latitude = ref(null);
 const longitude = ref(null);
-const selfieTaken = ref(null);
-const videoElement = ref(null);
-const canvasElement = ref(null);
-const selfieImage = ref(null);
+const selfieTaken = ref(false); // Diubah ke boolean default false
+const selfieImage = ref(null); // Menyimpan format lengkap base64 murni untuk src img
+const rawBase64 = ref(null); // Menyimpan string base64 murni tanpa header data:image
 const loading = ref(false);
+const loadingLoc = ref(false);
 const getUser = localStorage.getItem("master_user");
 const userData = ref([]);
-const imageLocation = ref(null);
-const printRes = ref(null);
-const printRes2 = ref(null);
 const dataPosition = ref(null);
-const prinLok = ref(null);
 const fileName = ref(null);
-const imageBase64 = ref(null);
 const keterangan = ref(null);
-const showModal = ref(false);
-const isRefreshing = ref(false);
+
 const hariList = [
   "Minggu",
   "Senin",
@@ -176,15 +182,15 @@ const hariList = [
   "Jumat",
   "Sabtu",
 ];
-const user = ref(null);
 const baseLocation_lat = ref("");
 const baseLocation_long = ref("");
 const statusUser_base = ref("");
+const user = ref(null);
 const parsedUser = ref(null);
 const geterUser = ref(null);
+const phone = ref(null);
 const nik = ref(null);
 const description = ref(null);
-const phone = ref(null);
 const department_name = ref(null);
 
 // ── Functions ─────────────────────────────────────
@@ -193,102 +199,119 @@ const getCurrentDateTime = () => {
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
-  const hours = String(now.getHours()).padStart(2, "0");
-  const minutes = String(now.getMinutes()).padStart(2, "0");
-  const seconds = String(now.getSeconds()).padStart(2, "0");
-
   tanggalHariIni.value = `${day}-${month}-${year}`;
   hariIni.value = hariList[now.getDay()];
-  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 };
 
 const dateNow = () => {
   const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(
+    2,
+    "0"
+  )}-${String(now.getDate()).padStart(2, "0")}`;
 };
 
 const time = () => {
   const now = new Date();
-  const hours = String(now.getHours()).padStart(2, "0");
-  const minutes = String(now.getMinutes()).padStart(2, "0");
-  const seconds = String(now.getSeconds()).padStart(2, "0");
-  return `${hours}:${minutes}:${seconds}`;
+  return `${String(now.getHours()).padStart(2, "0")}:${String(
+    now.getMinutes()
+  ).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
 };
 
-const getLocation = () => {
-  if ("geolocation" in navigator) {
-    loading.value = true;
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        latitude.value = position.coords.latitude;
-        longitude.value = position.coords.longitude;
-        loading.value = false;
-      },
-      (error) => {
-        console.error("Gagal mengambil lokasi:", error.message);
-      }
-    );
+const getLocation = async () => {
+  try {
+    // 1. Minta izin dulu secara native
+    const permission = await Geolocation.requestPermissions();
+    if (
+      permission.location !== "granted" &&
+      permission.coarseLocation !== "granted"
+    ) {
+      throw new Error("Izin lokasi ditolak");
+    }
+
+    // 2. Ambil posisi via Capacitor (bukan browser geolocation)
+    const position = await Geolocation.getCurrentPosition({
+      enableHighAccuracy: true,
+      timeout: 15000,
+    });
+
+    latitude.value = position.coords.latitude;
+    longitude.value = position.coords.longitude;
+  } catch (error) {
+    throw error; // ← lempar ke fetchData untuk ditangani
   }
 };
 
 const fetchData = async () => {
-  loading.value = true;
+  loadingLoc.value = true;
+  dataPosition.value = null;
   try {
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          latitude.value = position.coords.latitude;
-          longitude.value = position.coords.longitude;
-          const response = await Http.get({
-            url: "https://nominatim.openstreetmap.org/reverse",
-            params: {
-              format: "jsonv2",
-              lat: latitude.value,
-              lon: longitude.value,
-            },
-            headers: { "User-Agent": "erpsmb/2.3 (trimurdani78.tm@gmail.com)" },
-          });
-          dataPosition.value = (await response).data.display_name;
-          await showToast(dataPosition.value, "success");
-          loading.value = false;
-        },
-        (error) => {
-          console.error("Gagal mengambil lokasi:", error.message);
-        }
-      );
-    }
+    await getLocation();
+    const response = await Http.get({
+      url: "https://nominatim.openstreetmap.org/reverse",
+      params: {
+        format: "jsonv2",
+        lat: latitude.value,
+        lon: longitude.value,
+      },
+      headers: { "User-Agent": "erpsmb/2.3 (trimurdani78.tm@gmail.com)" },
+    });
+    dataPosition.value = response.data.display_name;
+    await showToast("Lokasi berhasil didapatkan", "success");
   } catch (error) {
     console.error("Error Menampilkan Lokasi:", error);
+    dataPosition.value = null;
+    await showToast("Gagal mendapatkan lokasi. Pastikan GPS aktif.", "danger");
   } finally {
-    loading.value = false;
+    loadingLoc.value = false;
   }
 };
 
-const takeSelfie = () => {
-  const video = videoElement.value;
-  const canvas = canvasElement.value;
-  const context = canvas.getContext("2d");
+// ── Alur Kamera Native & Permission ──
+const takeSelfieNative = async () => {
+  try {
+    // 1. Cek status permission native saat ini
+    const status = await Camera.checkPermissions();
 
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-  context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    // 2. Jika permission belum diberikan, minta secara native
+    if (status.camera !== "granted") {
+      const requestStatus = await Camera.requestPermissions({
+        permissions: ["camera"],
+      });
+      if (requestStatus.camera !== "granted") {
+        await showToast("Akses kamera ditolak oleh pengguna.", "danger");
+        return;
+      }
+    }
 
-  selfieImage.value = canvas.toDataURL("image/jpg");
-  selfieTaken.value = "data:image/jpeg;base64," + selfieImage.value;
+    // 3. Jalankan kamera native (Directly open front camera)
+    const image = await Camera.getPhoto({
+      quality: 85,
+      allowEditing: false,
+      resultType: CameraResultType.Base64, // Kita minta base64 murni agar konversi ke Blob mudah
+      source: CameraSource.Camera, // Membuka modul kamera langsung
+      direction: "front", // Request menggunakan kamera depan (Selfie)
+    });
+
+    // 4. Simpan hasil foto ke state
+    rawBase64.value = image.base64String;
+    selfieImage.value = `data:image/jpeg;base64,${image.base64String}`;
+    selfieTaken.value = true;
+  } catch (error) {
+    console.error("Kamera dibatalkan/error:", error);
+    // User menekan tombol back native tanpa mengambil foto akan masuk ke catch block ini
+  }
 };
 
-const dataURItoBlob = (dataURI) => {
-  const byteString = atob(dataURI.split(",")[1]);
-  const mimeString = dataURI.split(",")[0].split(":")[1].split(";")[0];
-  const arrayBuffer = new ArrayBuffer(byteString.length);
-  const uint8Array = new Uint8Array(arrayBuffer);
-  for (let i = 0; i < byteString.length; i++) {
-    uint8Array[i] = byteString.charCodeAt(i);
+// Fungsi helper konversi Base64 murni ke Blob berkas biner
+const base64ToBlob = (base64, mimeType) => {
+  const byteCharacters = atob(base64);
+  const byteNumbers = new Array(byteCharacters.length);
+  for (let i = 0; i < byteCharacters.length; i++) {
+    byteNumbers[i] = byteCharacters.charCodeAt(i);
   }
-  return new Blob([uint8Array], { type: mimeString });
+  const byteArray = new Uint8Array(byteNumbers);
+  return new Blob([byteArray], { type: mimeType });
 };
 
 const showSuccessAlert = async () => {
@@ -300,37 +323,6 @@ const showSuccessAlert = async () => {
     cssClass: "custom-alert",
   });
   await alert.present();
-};
-
-const fetchUserPrepAbsen = async () => {
-  try {
-    const token = localStorage.getItem("access_token");
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
-    userData.value = JSON.parse(getUser);
-    const response = api.get("showByUser/" + userData.value.user, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    user.value = (await response).data;
-    parsedUser.value = JSON.stringify(user.value);
-    geterUser.value = JSON.parse(parsedUser.value);
-    phone.value = geterUser.value.data.phone;
-    nik.value = geterUser.value.data.nik;
-    description.value = geterUser.value.data.description;
-    department_name.value = geterUser.value.data.department_name;
-    user.value = geterUser.value.data.user;
-    baseLocation_lat.value = geterUser.value.data.base_location_lat;
-    baseLocation_long.value = geterUser.value.data.base_location_long;
-    statusUser_base.value = geterUser.value.data.is_mobile;
-  } catch (error) {
-    console.error(
-      "❌ Gagal mengambil data pengguna:",
-      error.response?.data || error
-    );
-    if (error.response?.status === 401) logout();
-  }
 };
 
 function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
@@ -355,6 +347,7 @@ const submitAbsen = async () => {
     const baseLong = parseFloat(baseLocation_long.value);
     const userLat = parseFloat(latitude.value);
     const userLong = parseFloat(longitude.value);
+
     const distance = getDistanceFromLatLonInMeters(
       userLat,
       userLong,
@@ -376,64 +369,108 @@ const submitAbsen = async () => {
 
     const absenData = new FormData();
     const timestamp = new Date().getTime();
-    fileName.value = `IN_${userData.value.user}_${timestamp}.png`;
+    fileName.value = `IN_${userData.value.user}_${timestamp}.jpeg`;
 
     absenData.append("user_id", userData.value.user);
     absenData.append("date", dateNow());
     absenData.append("time_in", time());
     absenData.append("latitude_in", latitude.value);
     absenData.append("longitude_in", longitude.value);
-    absenData.append("absensi_ref", keterangan.value.value);
+    absenData.append(
+      "absensi_ref",
+      keterangan.value ? keterangan.value.value : ""
+    );
     absenData.append("address_in", dataPosition.value);
 
-    const blob = dataURItoBlob(selfieImage.value);
-    if (blob.size === 0) {
+    const blob = base64ToBlob(rawBase64.value, "image/jpeg");
+    if (!blob || blob.size === 0) {
       await showToast("File gambar tidak valid!", "danger");
+      loading.value = false;
       return;
     }
     absenData.append("images_in", blob, fileName.value);
 
-    const response = api.post("/addAbsen", absenData, {
+    const apiBase = import.meta.env.VITE_BASE_URL;
+    const res = await fetch(`${apiBase}/addAbsen`, {
+      method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
-        "Content-Type": "multipart/form-data",
       },
+      body: absenData,
     });
-    const resultAbsen = (await response).data;
-    printRes.value = JSON.stringify(resultAbsen);
-    printRes2.value = JSON.parse(printRes.value);
-    showSuccessAlert();
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      console.error("Server error:", JSON.stringify(errData));
+      const errMsg = errData?.errors
+        ? Object.entries(errData.errors)
+            .map(([f, m]) => `${f}: ${m}`)
+            .join("\n")
+        : errData?.message ?? "Terjadi kesalahan server";
+      await showToast(errMsg, "danger");
+      return;
+    }
+
+    await showSuccessAlert();
     router.replace("/");
   } catch (error) {
     console.error("Gagal absen:", error.response?.data || error.message);
-    router.replace("/");
-    await showToast(error.response.data.message, "danger");
+    await showToast(
+      error.response?.data?.message || "Terjadi kesalahan server",
+      "danger"
+    );
   } finally {
     loading.value = false;
-    router.replace("/");
   }
 };
 
-const handleRefresh = (event) => {
-  setTimeout(() => {
-    window.location.reload();
+const handleRefresh = async (event) => {
+  try {
+    await fetchData();
+  } finally {
     event.target.complete();
-  }, 1000);
+  }
+};
+
+const fetchUserPrepAbsen = async () => {
+  try {
+    const token = localStorage.getItem("access_token");
+
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    userData.value = JSON.parse(getUser);
+
+    const response = api.get("showByUser/" + userData.value.user, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    user.value = (await response).data;
+    parsedUser.value = JSON.stringify(user.value);
+    geterUser.value = JSON.parse(parsedUser.value);
+    phone.value = geterUser.value.data.phone;
+    nik.value = geterUser.value.data.nik;
+    description.value = geterUser.value.data.description;
+    department_name.value = geterUser.value.data.department_name;
+    user.value = geterUser.value.data.user;
+    baseLocation_lat.value = geterUser.value.data.base_location_lat;
+    baseLocation_long.value = geterUser.value.data.base_location_long;
+    statusUser_base.value = geterUser.value.data.is_mobile;
+  } catch (error) {
+    console.error(
+      "❌ Gagal mengambil data pengguna:",
+      error.response?.data || error
+    );
+    if (error.response?.status === 401) router.replace("/login");
+  }
 };
 
 onMounted(() => {
   getCurrentDateTime();
-  getLocation();
   fetchData();
   fetchUserPrepAbsen();
-  navigator.mediaDevices
-    .getUserMedia({ video: { facingMode: "user" } })
-    .then((stream) => {
-      videoElement.value.srcObject = stream;
-    })
-    .catch((error) => {
-      console.error("Gagal mengakses kamera:", error.message);
-    });
 });
 </script>
 
@@ -762,5 +799,98 @@ ion-content {
 .custom-alert .alert-button:last-child .alert-button-inner {
   color: #ffffff !important;
   justify-content: center;
+}
+
+/* ─── Camera Placeholder (Modern) ──────────────── */
+.camera-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  background: linear-gradient(160deg, #0f172a 0%, #1e293b 60%, #1e3a8a22 100%);
+  min-height: 220px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Dot grid background texture */
+.camera-placeholder::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.06) 1px,
+    transparent 1px
+  );
+  background-size: 20px 20px;
+  pointer-events: none;
+}
+
+/* Animated pulse ring */
+.cam-pulse-ring {
+  position: absolute;
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  border: 2px solid rgba(37, 99, 235, 0.35);
+  animation: camPulse 2.4s ease-out infinite;
+}
+
+@keyframes camPulse {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.8;
+  }
+  70% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(0.85);
+    opacity: 0;
+  }
+}
+
+/* Icon circle */
+.cam-circle {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1d4ed8, #2563eb);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 8px rgba(37, 99, 235, 0.15),
+    0 8px 24px rgba(37, 99, 235, 0.4);
+  z-index: 1;
+  margin-bottom: 16px;
+}
+
+.placeholder-icon {
+  font-size: 34px;
+  color: #ffffff;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.3));
+}
+
+.cam-placeholder-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.75);
+  margin: 0 0 10px;
+  z-index: 1;
+}
+
+.cam-hint-badge {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(37, 99, 235, 0.9);
+  background: rgba(37, 99, 235, 0.15);
+  border: 1px solid rgba(37, 99, 235, 0.3);
+  padding: 4px 12px;
+  border-radius: 20px;
+  z-index: 1;
+  letter-spacing: 0.2px;
 }
 </style>

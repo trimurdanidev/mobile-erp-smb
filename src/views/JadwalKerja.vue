@@ -1,4 +1,4 @@
-<template>
+\<template>
   <ion-page>
     <ion-header class="jadwal-app-header" :translucent="false">
       <ion-toolbar class="custom-header">
@@ -15,7 +15,7 @@
     </ion-header>
 
     <ion-content :fullscreen="false">
-      <!-- Filter -->
+      <!-- Filter Bulan & Tahun -->
       <div class="filter-wrap">
         <div class="filter-group">
           <label class="filter-label">Bulan</label>
@@ -41,6 +41,27 @@
         </div>
       </div>
 
+      <!-- ✅ Filter Karyawan — di luar v-else, selalu tampil untuk privileged -->
+      <div
+        v-if="isPrivileged && getUserData2.length > 0"
+        class="employee-filter-card"
+        style="margin: 12px 16px 0"
+      >
+        <div class="employee-filter-header">
+          <ion-icon :icon="peopleOutline" class="emp-icon"></ion-icon>
+          <span class="emp-label">Pilih Karyawan</span>
+        </div>
+        <select
+          v-model="selectedUser"
+          class="filter-select"
+          @change="loadJadwal"
+        >
+          <option v-for="u in getUserData2" :key="u.id" :value="u.user">
+            {{ u.username }}
+          </option>
+        </select>
+      </div>
+
       <!-- Loading -->
       <div v-if="loading" class="center-state">
         <ion-spinner name="crescent" color="primary"></ion-spinner>
@@ -59,8 +80,8 @@
         <div class="user-info-card">
           <div class="user-avatar">{{ userInitial }}</div>
           <div class="user-text">
-            <div class="user-name">{{ userData.description }}</div>
-            <div class="user-dept">{{ userData.department_name }}</div>
+            <div class="user-name">{{ selectedUserName }}</div>
+            <div class="user-dept">{{ selectedUserDept }}</div>
           </div>
           <div class="month-badge">
             {{ months[selectedMonth - 1] }} {{ selectedYear }}
@@ -94,9 +115,6 @@
             <div class="shift-badge" :class="getShiftClass(item.shift_code)">
               {{ item.shift_code || "·" }}
             </div>
-            <div class="shift-time" v-if="item.shift_name">
-              {{ item.shift_time }}
-            </div>
           </div>
         </div>
 
@@ -104,17 +122,18 @@
         <div class="summary-card">
           <div class="summary-title">Ringkasan Bulan Ini</div>
           <div class="summary-row">
-            <div class="summary-item">
-              <div class="sum-val sum-pagi">{{ countShift("P") }}</div>
-              <div class="sum-lbl">Pagi</div>
-            </div>
-            <div class="summary-item">
-              <div class="sum-val sum-siang">{{ countShift("S") }}</div>
-              <div class="sum-lbl">Siang</div>
-            </div>
-            <div class="summary-item">
-              <div class="sum-val sum-normal">{{ countShift("N") }}</div>
-              <div class="sum-lbl">Normal</div>
+            <div
+              v-for="shift in masterShifts"
+              :key="shift.shift_id"
+              class="summary-item"
+            >
+              <div
+                class="sum-val"
+                :style="{ color: getShiftColor(shift.shift_code) }"
+              >
+                {{ countShift(shift.shift_code) }}
+              </div>
+              <div class="sum-lbl">{{ shift.shift_name }}</div>
             </div>
             <div class="summary-item">
               <div class="sum-val sum-off">{{ countShift("off") }}</div>
@@ -139,7 +158,11 @@ import {
   IonIcon,
   IonSpinner,
 } from "@ionic/vue";
-import { calendarOutline, arrowBackOutline } from "ionicons/icons";
+import {
+  calendarOutline,
+  arrowBackOutline,
+  peopleOutline,
+} from "ionicons/icons";
 import { ref, computed, onMounted } from "vue";
 import api from "@/services/api";
 
@@ -150,6 +173,9 @@ const loading = ref(false);
 const jadwalList = ref<any[]>([]);
 
 const userData = ref(JSON.parse(localStorage.getItem("master_user") || "{}"));
+const getUser = localStorage.getItem("master_user");
+const getUserData2 = ref<any[]>([]);
+const selectedUser = ref(userData.value.user);
 const userInitial = computed(() => {
   const name = userData.value.description || userData.value.user || "?";
   return name
@@ -177,6 +203,18 @@ const months = [
 const years = Array.from({ length: 5 }, (_, i) => today.getFullYear() - 1 + i);
 
 const dayNames = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
+
+const loadAllUsers = async () => {
+  try {
+    const token = localStorage.getItem("access_token");
+    const res = await api.get("/showAll", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    getUserData2.value = res.data.data || res.data || [];
+  } catch (err) {
+    console.error("Gagal load users:", err);
+  }
+};
 
 const formatDay = (dateStr: string) => new Date(dateStr).getDate();
 const getDayName = (dateStr: string) => dayNames[new Date(dateStr).getDay()];
@@ -218,6 +256,11 @@ const loadMasterShifts = async () => {
   }
 };
 
+const privilegedDepts = ["Owner", "Manager", "IT"];
+const isPrivileged = privilegedDepts.some((d) =>
+  (userData.value.department_name || "").includes(d)
+);
+
 // Update getShiftClass — pakai shiftCodeMap
 const getShiftClass = (code: string) => {
   if (code === "P") return "badge-p";
@@ -231,12 +274,10 @@ const getShiftClass = (code: string) => {
 const loadJadwal = async () => {
   loading.value = true;
   try {
-    const user = userData.value.user;
+    const user = selectedUser.value || userData.value.user;
     const response = await api.get(
       `/getUserSchedule/${user}/${selectedYear.value}/${selectedMonth.value}`
     );
-
-    // Enrich data dengan shift_code dari masterShifts
     const raw = response.data.data || [];
     jadwalList.value = raw.map((item: any) => ({
       ...item,
@@ -255,6 +296,28 @@ const loadJadwal = async () => {
   }
 };
 
+const selectedUserName = computed(() => {
+  if (!isPrivileged) return userData.value.description || userData.value.user;
+  const found = getUserData2.value.find((u) => u.user === selectedUser.value);
+  return found ? found.username : userData.value.description;
+});
+
+const selectedUserDept = computed(() => {
+  if (!isPrivileged) return userData.value.department_name || "";
+  const found = getUserData2.value.find((u) => u.user === selectedUser.value);
+  return found ? found.department_name || "" : userData.value.department_name;
+});
+
+const getShiftColor = (code: string): string => {
+  const colorMap: Record<string, string> = {
+    P: "#28a745",
+    S: "#fd7e14",
+    N: "#007bff",
+    M: "#7c3aed",
+  };
+  return colorMap[code] ?? "#888888";
+};
+
 const countShift = (code: string) =>
   jadwalList.value.filter((j) => {
     const isSunday = new Date(j.schedule_date).getDay() === 0;
@@ -267,6 +330,9 @@ const countShift = (code: string) =>
 
 onMounted(async () => {
   await loadMasterShifts();
+  if (isPrivileged) {
+    await loadAllUsers();
+  }
   await loadJadwal();
 });
 </script>
@@ -577,5 +643,34 @@ ion-content {
 }
 .sum-off {
   color: #ced4da;
+}
+.employee-filter-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 14px 16px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.employee-filter-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.emp-icon {
+  font-size: 18px;
+  color: #2563eb;
+  background: #eff6ff;
+  padding: 6px;
+  border-radius: 8px;
+}
+
+.emp-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #334155;
 }
 </style>

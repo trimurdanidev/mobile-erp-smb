@@ -194,7 +194,11 @@
                   class="custom-input"
                   placeholder="Ulangi password baru"
                 />
-                <button class="eye-btn" @click="togglePasswordConf" tabindex="-1">
+                <button
+                  class="eye-btn"
+                  @click="togglePasswordConf"
+                  tabindex="-1"
+                >
                   <ion-icon
                     :icon="showPasswordConf ? eyeOff : eye"
                     class="eye-icon"
@@ -538,22 +542,40 @@ const changeAvatar = () => {
 };
 const onFileChange = async (event) => {
   const file = event.target.files[0];
-  if (file) {
-    const formData = new FormData();
-    formData.append("avatar", file);
-    try {
-      const response = await api.post(
-        "/upload-avatar/" + userData.value.id,
-        formData,
-        {
-          headers: { "Content-Type": "multipart/form-data" },
-        }
-      );
-      if (response.data.success)
-        geterUser.value.data.avatar = response.data.avatarUrl;
-    } catch (error) {
-      await showToast(error.response.data.message, "danger");
+  if (!file) return;
+
+  if (file.size > 2 * 1024 * 1024) {
+    await showToast("Ukuran foto maksimal 2MB", "warning");
+    return;
+  }
+
+  const base64 = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(",")[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  await showLoading();
+  try {
+    const response = await api.post("/upload-avatar/" + userData.value.id, {
+      avatar: base64,
+      mime_type: file.type, // "image/jpeg", "image/png", dll
+    });
+    if (response.data.success) {
+      geterUser.value.data.avatar = response.data.avatarUrl;
+      await showToast("Foto profil berhasil diperbarui", "success");
     }
+  } catch (error) {
+    console.log("Upload error:", JSON.stringify(error.response?.data));
+    await showToast(
+      error.response?.data?.message ||
+        error.response?.data?.errors?.avatar?.[0] ||
+        "Gagal upload foto",
+      "danger"
+    );
+  } finally {
+    await hideLoading();
   }
 };
 </script>
@@ -797,7 +819,6 @@ ion-content {
   font-weight: 800;
   color: #1e293b;
   letter-spacing: -0.3px;
-  
 }
 .modal-close-btn {
   width: 34px;

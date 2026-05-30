@@ -1,24 +1,25 @@
-import { createApp } from 'vue'
-import App from './App.vue'
-import router from './router';
-
-import { IonicVue } from '@ionic/vue';
+import { createApp } from "vue";
+import App from "./App.vue";
+import router from "./router";
+import { Capacitor } from "@capacitor/core";
+import { IonicVue } from "@ionic/vue";
+import { initFCM } from "@/services/fcmService";
 
 /* Core CSS required for Ionic components to work properly */
-import '@ionic/vue/css/core.css';
+import "@ionic/vue/css/core.css";
 
 /* Basic CSS for apps built with Ionic */
-import '@ionic/vue/css/normalize.css';
-import '@ionic/vue/css/structure.css';
-import '@ionic/vue/css/typography.css';
+import "@ionic/vue/css/normalize.css";
+import "@ionic/vue/css/structure.css";
+import "@ionic/vue/css/typography.css";
 
 /* Optional CSS utils that can be commented out */
-import '@ionic/vue/css/padding.css';
-import '@ionic/vue/css/float-elements.css';
-import '@ionic/vue/css/text-alignment.css';
-import '@ionic/vue/css/text-transformation.css';
-import '@ionic/vue/css/flex-utils.css';
-import '@ionic/vue/css/display.css';
+import "@ionic/vue/css/padding.css";
+import "@ionic/vue/css/float-elements.css";
+import "@ionic/vue/css/text-alignment.css";
+import "@ionic/vue/css/text-transformation.css";
+import "@ionic/vue/css/flex-utils.css";
+import "@ionic/vue/css/display.css";
 
 /**
  * Ionic Dark Mode
@@ -29,11 +30,11 @@ import '@ionic/vue/css/display.css';
 
 /* @import '@ionic/vue/css/palettes/dark.always.css'; */
 /* @import '@ionic/vue/css/palettes/dark.class.css'; */
-import '@ionic/vue/css/palettes/dark.system.css';
+import "@ionic/vue/css/palettes/dark.system.css";
 
 /* Theme variables */
-import './theme/variables.css';
-import api from './services/axiosInstance';
+import "./theme/variables.css";
+import api from "./services/axiosInstance";
 
 const token = localStorage.getItem("access_token");
 //router.beforeEach((to, from, next) => {
@@ -45,14 +46,20 @@ const token = localStorage.getItem("access_token");
 //   }
 // });
 
-if(token){
+if (token) {
   api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
 }
 
-const app = createApp(App)
-  .use(IonicVue)
-  .use(router);
+const app = createApp(App).use(IonicVue).use(router);
 
-router.isReady().then(() => {
-  app.mount('#app');
+router.isReady().then(async () => {
+  app.mount("#app");
+
+  // Init FCM hanya di device native (bukan browser)
+  if (Capacitor.isNativePlatform()) {
+    const token = localStorage.getItem("access_token");
+    if (token) {
+      await initFCM();
+    }
+  }
 });

@@ -1,80 +1,110 @@
-import { createRouter, createWebHistory } from '@ionic/vue-router';
-import { RouteRecordRaw } from 'vue-router';
-import Login from '../views/Login.vue';
-import Home from '../views/Home.vue';
-import AbsenMasuk from '../views/AbsenMasuk.vue';
-import AbsenPulang from '../views/AbsenPulang.vue';
-import RekapAbsen from '../views/RekapAbsensi.vue';
-import TabsPage from '../views/TabsPage.vue';
-import JadwalKerja from '../views/JadwalKerja.vue';
-import { constructOutline } from 'ionicons/icons';
+import { createRouter, createWebHistory } from "@ionic/vue-router";
+import { RouteRecordRaw } from "vue-router";
+import Login from "../views/Login.vue";
+import Home from "../views/Home.vue";
+import AbsenMasuk from "../views/AbsenMasuk.vue";
+import AbsenPulang from "../views/AbsenPulang.vue";
+import RekapAbsen from "../views/RekapAbsensi.vue";
+import TabsPage from "../views/TabsPage.vue";
+import JadwalKerja from "../views/JadwalKerja.vue";
+import { constructOutline } from "ionicons/icons";
+import NotificationPage from "@/views/NotificationPage.vue";
+import ScanResi from "@/views/ScanResi.vue";
+import ScanPacking from "@/views/ScanPacking.vue";
+import HistoryScan from "@/views/ViewHistoryScan.vue";
+import LaporanStatus from "@/views/LaporanStatus.vue";
+import LaporanAdmin from "@/views/LaporanAdmin.vue";
 
 const routes: Array<RouteRecordRaw> = [
   {
-    path: '/',
-    redirect: '/home',
+    path: "/",
+    redirect: "/home",
   },
   {
-    path: '/login',
-    name: 'login',
-    component: Login
+    path: "/login",
+    name: "login",
+    component: Login,
   },
   {
-    path: '/',
+    path: "/",
     component: TabsPage,
     meta: { requiresAuth: true },
     children: [
       {
-        path: '/tabs',
-        redirect: '/home'
+        path: "/tabs",
+        redirect: "/home",
       },
       {
-        path: '/home',
-        name: 'home',
-        component: () => import('../views/Home.vue')
+        path: "/home",
+        name: "home",
+        component: () => import("../views/Home.vue"),
       },
       {
-        path: '/profile',
-        component: () => import('../views/Profile.vue')
+        path: "/profile",
+        component: () => import("../views/Profile.vue"),
       },
       {
-        path: '/in',
-        component: AbsenMasuk
+        path: "/in",
+        component: AbsenMasuk,
       },
       {
-        path: '/out',
-        component: AbsenPulang
+        path: "/out",
+        component: AbsenPulang,
       },
       {
-        path: '/rekap',
-        component: RekapAbsen
+        path: "/rekap",
+        component: RekapAbsen,
       },
       {
-        path: '/jadwal',
-        component: JadwalKerja
+        path: "/jadwal",
+        component: JadwalKerja,
       },
       {
-        path: '/logout',
-        component: () => import('../views/Login.vue')
-      }
-    ]
+        path: "/notifications",
+        component: NotificationPage,
+      },
+      {
+        path: "/scan-resi",
+        component: ScanResi,
+      },
+      {
+        path: "/scan-packing",
+        component: ScanPacking,
+      },
+      {
+        path: "/history-scan",
+        component: HistoryScan,
+      },
+      {
+        path: "/laporan-status",
+        component: LaporanStatus,
+      },
+      {
+        path: "/laporan-admin",
+        component: LaporanAdmin,
+      },
+      {
+        path: "/logout",
+        component: () => import("../views/Login.vue"),
+      },
+    ],
   },
 ];
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
-  routes
-})
+  routes,
+});
 
 // Route Guard
 router.beforeEach((to, from, next) => {
-  const token     = localStorage.getItem("access_token");
+  const token = localStorage.getItem("access_token");
   const expiredAt = localStorage.getItem("token_expires_at");
 
-  const isTokenExpired = !token || !expiredAt 
-                         || new Date().getTime() >= parseInt(expiredAt);
+  const isTokenExpired =
+    !token || !expiredAt || new Date().getTime() >= parseInt(expiredAt);
 
-  const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
+  const requiresAuth = to.matched.some((record) => record.meta.requiresAuth);
 
   if (requiresAuth && isTokenExpired) {
     localStorage.removeItem("access_token");
@@ -83,10 +113,8 @@ router.beforeEach((to, from, next) => {
 
     console.warn("⛔ Session expired, redirect ke login");
     next({ name: "login" });
-
   } else if (to.name === "login" && token && !isTokenExpired) {
     next({ name: "home" });
-
   } else {
     next();
   }

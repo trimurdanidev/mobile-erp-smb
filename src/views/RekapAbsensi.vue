@@ -423,7 +423,7 @@ onMounted(() => {
   userData.value = JSON.parse(getUser);
   if (
     userData.value.department_name === "Owner" ||
-    userData.value.department_name === "Manager"
+    userData.value.department_name === "Manager" || userData.value.department_name === "IT"
   ) {
     loadAllUsers();
   }
