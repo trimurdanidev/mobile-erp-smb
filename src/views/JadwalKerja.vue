@@ -1,4 +1,4 @@
-\<template>
+<template>
   <ion-page>
     <ion-header class="jadwal-app-header" :translucent="false">
       <ion-toolbar class="custom-header">
