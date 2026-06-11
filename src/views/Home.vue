@@ -13,7 +13,6 @@
 
       <div class="home-wrapper">
         <!-- ── Menu Utama ──────────────────────────── -->
-        <div class="section-label">Menu Utama</div>
         <div class="action-grid">
           <!-- Absen Masuk -->
           <button
@@ -47,6 +46,55 @@
               <ion-icon :icon="calendarOutline"></ion-icon>
             </div>
             <span class="action-title">Jadwal Kerja</span>
+          </button>
+
+          <button
+            v-if="showScanResi"
+            class="action-card"
+            @click="goTo('scan-resi')"
+            aria-label="Scan Resi"
+          >
+            <div class="action-icon-wrap resi-icon-bg">
+              <ion-icon :icon="barcodeOutline"></ion-icon>
+            </div>
+            <span class="action-title">Scan Resi</span>
+          </button>
+
+          <button
+            v-if="showScanPacking"
+            class="action-card"
+            @click="goTo('scan-packing')"
+            aria-label="Scan Packing"
+          >
+            <div class="action-icon-wrap packing-icon-bg">
+              <ion-icon :icon="cubeOutline"></ion-icon>
+            </div>
+            <span class="action-title">Scan Packing</span>
+          </button>
+
+          <button
+            class="action-card"
+            @click="goTo('history-scan')"
+            aria-label="Riwayat Scan Resi"
+          >
+            <div
+              class="action-icon-wrap"
+              style="background: #e0f2fe; color: #0284c7"
+            >
+              <ion-icon :icon="timeOutline"></ion-icon>
+            </div>
+            <span class="action-title">Riwayat Scan</span>
+          </button>
+          <button
+            v-if="showLaporan"
+            class="action-card"
+            @click="openLaporan"
+            aria-label="Laporan"
+          >
+            <div class="action-icon-wrap laporan-icon-bg">
+              <ion-icon :icon="barChartOutline"></ion-icon>
+            </div>
+            <span class="action-title">Laporan</span>
           </button>
 
           <!-- ERP SMB Web -->
@@ -114,6 +162,45 @@
           </div>
         </div>
       </div>
+      <!-- ── Modal Sub Menu Laporan ─────────────── -->
+      <div v-if="showLaporanModal" class="modal-overlay" @click="closeLaporan">
+        <div class="modal-sheet" @click.stop>
+          <div class="modal-handle"></div>
+          <div class="modal-title">Pilih Laporan</div>
+
+          <button class="modal-item" @click="goToLaporan('laporan-status')">
+            <div class="modal-icon-wrap status-icon-bg">
+              <ion-icon :icon="listOutline"></ion-icon>
+            </div>
+            <div class="modal-item-text">
+              <span class="modal-item-title">Laporan Resi by Status</span>
+              <span class="modal-item-sub"
+                >Laporan berdasarkan status proses</span
+              >
+            </div>
+            <ion-icon
+              :icon="chevronForwardOutline"
+              class="modal-chevron"
+            ></ion-icon>
+          </button>
+
+          <button class="modal-item" @click="goToLaporan('laporan-admin')">
+            <div class="modal-icon-wrap admin-icon-bg">
+              <ion-icon :icon="personOutline"></ion-icon>
+            </div>
+            <div class="modal-item-text">
+              <span class="modal-item-title">Laporan Resi by Admin</span>
+              <span class="modal-item-sub">Laporan berdasarkan admin/user</span>
+            </div>
+            <ion-icon
+              :icon="chevronForwardOutline"
+              class="modal-chevron"
+            ></ion-icon>
+          </button>
+
+          <button class="modal-cancel" @click="closeLaporan">Batal</button>
+        </div>
+      </div>
     </ion-content>
   </ion-page>
 </template>
@@ -141,6 +228,13 @@ import {
   peopleOutline,
   globeOutline,
   calendarOutline,
+  barcodeOutline,
+  cubeOutline,
+  timeOutline,
+  barChartOutline,
+  listOutline,
+  personOutline,
+  chevronForwardOutline,
 } from "ionicons/icons";
 import { onMounted, ref } from "vue";
 import api from "@/services/api";
@@ -191,6 +285,7 @@ export default {
       "November",
       "Desember",
     ];
+
     const tamBulan = month[today.getMonth()];
     const tahun = today.getFullYear();
 
@@ -199,6 +294,43 @@ export default {
         window.location.reload();
         event.target.complete();
       }, 1000);
+    };
+
+    const parsedUser = getUser ? JSON.parse(getUser) : {};
+    const deptName = (parsedUser.department_name || "").toLowerCase();
+    const deptCode = (parsedUser.department_code || "").toUpperCase();
+    const showScanResi = [
+      "DPT001",
+      "DPT002",
+      "DPT005",
+      "DPT006",
+      "DPT007",
+    ].includes(deptCode);
+    const showScanPacking = [
+      "DPT001",
+      "DPT002",
+      "DPT005",
+      "DPT006",
+      "DPT007",
+      "DPT008",
+    ].includes(deptCode);
+
+    const showLaporan = ["DPT005", "DPT006", "DPT007"].includes(deptCode);
+
+    // State modal sub menu laporan
+    const showLaporanModal = ref(false);
+
+    const openLaporan = () => {
+      showLaporanModal.value = true;
+    };
+
+    const closeLaporan = () => {
+      showLaporanModal.value = false;
+    };
+
+    const goToLaporan = (type) => {
+      showLaporanModal.value = false;
+      router.replace(`/${type}`);
     };
 
     Tanggal.value =
@@ -310,6 +442,20 @@ export default {
       tamBulan,
       tahun,
       calendarOutline,
+      showScanResi,
+      showScanPacking,
+      barcodeOutline,
+      cubeOutline,
+      timeOutline,
+      showLaporan,
+      showLaporanModal,
+      openLaporan,
+      closeLaporan,
+      goToLaporan,
+      barChartOutline,
+      listOutline,
+      personOutline,
+      chevronForwardOutline,
     };
   },
 };
@@ -357,17 +503,6 @@ ion-content::part(scroll) {
   gap: 20px;
   background: #f0f4f8;
   min-height: 100%;
-}
-
-/* ─── Section Label ─────────────────────────────── */
-.section-label {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 1.2px;
-  text-transform: uppercase;
-  color: #8a9bb0;
-  padding-left: 4px;
-  margin-bottom: -10px;
 }
 
 /* ─── Action Grid ───────────────────────────────── */
@@ -692,14 +827,14 @@ ion-content::part(scroll) {
 }
 
 .action-card {
-  padding: 14px 10px 12px;  /* ← dari 20px 12px 16px */
-  gap: 7px;                  /* ← dari 10px */
+  padding: 14px 10px 12px; /* ← dari 20px 12px 16px */
+  gap: 7px; /* ← dari 10px */
 }
 
 /* Perkecil icon wrap */
 .action-icon-wrap {
-  width: 48px;   /* ← dari 60px */
-  height: 48px;  /* ← dari 60px */
+  width: 48px; /* ← dari 60px */
+  height: 48px; /* ← dari 60px */
   border-radius: 14px; /* ← dari 18px */
 }
 
@@ -710,7 +845,7 @@ ion-content::part(scroll) {
 /* Perkecil ERP Web card */
 .action-card-wide {
   padding: 13px 16px; /* ← dari 18px 20px */
-  gap: 12px;          /* ← dari 16px */
+  gap: 12px; /* ← dari 16px */
 }
 
 .action-card-wide .action-title {
@@ -728,5 +863,141 @@ ion-content::part(scroll) {
 .ion-page,
 ion-app > .ion-page {
   --ion-background-color: #f0f4f8;
+}
+
+.resi-icon-bg {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+
+.packing-icon-bg {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+}
+/* ─── Laporan Icon ──────────────────────────── */
+.laporan-icon-bg {
+  background: linear-gradient(135deg, #0891b2, #0e7490);
+}
+
+/* ─── Modal Overlay ─────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 9999;
+  display: flex;
+  align-items: flex-end;
+}
+
+.modal-sheet {
+  width: 100%;
+  background: #ffffff;
+  border-radius: 24px 24px 0 0;
+  padding: 12px 20px 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: slideUp 0.25s ease;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.modal-handle {
+  width: 40px;
+  height: 4px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  margin: 0 auto 12px;
+}
+
+.modal-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 8px;
+  padding-left: 4px;
+}
+
+.modal-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 12px;
+  background: #f8fafc;
+  border: none;
+  border-radius: 16px;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  transition: background 0.15s ease;
+}
+
+.modal-item:active {
+  background: #f1f5f9;
+}
+
+.modal-icon-wrap {
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.modal-icon-wrap ion-icon {
+  font-size: 22px;
+  color: #fff;
+}
+
+.status-icon-bg {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+
+.admin-icon-bg {
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+}
+
+.modal-item-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.modal-item-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.modal-item-sub {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.modal-chevron {
+  font-size: 18px;
+  color: #cbd5e1;
+  flex-shrink: 0;
+}
+
+.modal-cancel {
+  margin-top: 6px;
+  padding: 14px;
+  background: none;
+  border: none;
+  border-radius: 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #ef4444;
+  cursor: pointer;
+  width: 100%;
 }
 </style>

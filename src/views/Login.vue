@@ -2,10 +2,13 @@
   <ion-page>
     <ion-content :fullscreen="true">
       <div class="login-bg">
-
         <!-- Top Wave / Hero -->
         <div class="login-hero">
-          <img src="/public/smb_logo_new.png" alt="logo-smb" class="hero-logo" />
+          <img
+            src="/public/smb_logo_new.png"
+            alt="logo-smb"
+            class="hero-logo"
+          />
           <h1 class="hero-title">ERP SMB</h1>
           <p class="hero-sub">Sistem Absensi & Manajemen Karyawan</p>
         </div>
@@ -18,7 +21,10 @@
           <!-- Username -->
           <div class="input-group">
             <label class="input-label">
-              <ion-icon :icon="personOutline" class="input-label-icon"></ion-icon>
+              <ion-icon
+                :icon="personOutline"
+                class="input-label-icon"
+              ></ion-icon>
               Username
             </label>
             <div class="input-wrap" :class="{ 'input-focus': focusUser }">
@@ -36,7 +42,10 @@
           <!-- Password -->
           <div class="input-group">
             <label class="input-label">
-              <ion-icon :icon="lockClosedOutline" class="input-label-icon"></ion-icon>
+              <ion-icon
+                :icon="lockClosedOutline"
+                class="input-label-icon"
+              ></ion-icon>
               Password
             </label>
             <div class="input-wrap" :class="{ 'input-focus': focusPass }">
@@ -50,7 +59,10 @@
                 @keyup.enter="login"
               />
               <button class="eye-btn" @click="togglePassword" tabindex="-1">
-                <ion-icon :icon="showPassword ? eyeOff : eye" class="eye-icon"></ion-icon>
+                <ion-icon
+                  :icon="showPassword ? eyeOff : eye"
+                  class="eye-icon"
+                ></ion-icon>
               </button>
             </div>
           </div>
@@ -62,7 +74,11 @@
             @click="login"
             :disabled="loading"
           >
-            <ion-spinner v-if="loading" name="crescent" class="login-spinner"></ion-spinner>
+            <ion-spinner
+              v-if="loading"
+              name="crescent"
+              class="login-spinner"
+            ></ion-spinner>
             <template v-else>
               <ion-icon :icon="logInOutline" class="login-btn-icon"></ion-icon>
               Login
@@ -86,9 +102,10 @@
           </div>
 
           <!-- Footer -->
-          <p class="footer-text">© FAH Software 2025. All rights reserved.<br />Versi 2.0.2</p>
+          <p class="footer-text">
+            © FAH Software 2025. All rights reserved.<br />Versi 2.0.4
+          </p>
         </div>
-
       </div>
 
       <!-- ── Modal Reset Password ──────────────────── -->
@@ -97,7 +114,10 @@
           <ion-toolbar class="modal-toolbar">
             <div class="modal-header-inner">
               <div class="modal-title-block">
-                <ion-icon :icon="keyOutline" class="modal-title-icon"></ion-icon>
+                <ion-icon
+                  :icon="keyOutline"
+                  class="modal-title-icon"
+                ></ion-icon>
                 <span class="modal-title-text">Reset Password</span>
               </div>
               <button class="modal-close-btn" @click="closeModal">
@@ -109,11 +129,15 @@
         <ion-content class="modal-content">
           <div class="modal-body">
             <p class="modal-desc">
-              Masukkan nomor WhatsApp yang terdaftar. Password baru akan dikirim via WhatsApp.
+              Masukkan nomor WhatsApp yang terdaftar. Password baru akan dikirim
+              via WhatsApp.
             </p>
             <div class="input-group">
               <label class="input-label">
-                <ion-icon :icon="logoWhatsapp" class="input-label-icon wa-color"></ion-icon>
+                <ion-icon
+                  :icon="logoWhatsapp"
+                  class="input-label-icon wa-color"
+                ></ion-icon>
                 Nomor WhatsApp
               </label>
               <div class="input-wrap">
@@ -134,7 +158,6 @@
           </div>
         </ion-content>
       </ion-modal>
-
     </ion-content>
   </ion-page>
 </template>
@@ -177,6 +200,8 @@ import {
 import { showToast } from "@/services/toastHandlers";
 import api from "@/services/api";
 import { computed } from "vue";
+import { Capacitor } from '@capacitor/core';
+import { initFCM } from '@/services/fcmService';
 
 export default {
   components: {
@@ -263,15 +288,22 @@ export default {
           password: password.value,
         });
 
-        const expiredAt = new Date().getTime() + (response.data.expires_in * 1000);
+        const expiredAt =
+          new Date().getTime() + response.data.expires_in * 1000;
         const masterUser = response.data.master_user;
 
         localStorage.setItem("access_token", response.data.access_token);
         localStorage.setItem("master_user", JSON.stringify(masterUser));
-        localStorage.setItem("token_expires_at", expiredAt.toString()); 
+        localStorage.setItem("token_expires_at", expiredAt.toString());
 
         username.value = "";
         password.value = "";
+
+        //Init FCM setelah login berhasil
+        if (Capacitor.isNativePlatform()) {
+          await initFCM();
+        }
+
         router.replace("/");
         window.location.replace("/");
         await showToast(response.data.message, "success");
@@ -345,7 +377,7 @@ ion-content {
   width: 140px;
   height: auto;
   object-fit: contain;
-  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.2));
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2));
 }
 
 .hero-title {
@@ -358,7 +390,7 @@ ion-content {
 
 .hero-sub {
   font-size: 13px;
-  color: rgba(255,255,255,0.65);
+  color: rgba(255, 255, 255, 0.65);
   margin: 0;
   text-align: center;
   font-weight: 500;
@@ -371,7 +403,7 @@ ion-content {
   border-radius: 24px;
   margin: -20px 16px 32px;
   padding: 28px 20px 24px;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1);
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -415,7 +447,9 @@ ion-content {
   color: #2563eb;
 }
 
-.wa-color { color: #22c55e; }
+.wa-color {
+  color: #22c55e;
+}
 
 .input-wrap {
   display: flex;
@@ -497,8 +531,14 @@ ion-content {
   cursor: not-allowed;
 }
 
-.login-btn-icon { font-size: 20px; }
-.login-spinner { --color: #ffffff; width: 20px; height: 20px; }
+.login-btn-icon {
+  font-size: 20px;
+}
+.login-spinner {
+  --color: #ffffff;
+  width: 20px;
+  height: 20px;
+}
 
 /* ─── Divider ───────────────────────────────────── */
 .divider {
@@ -546,8 +586,12 @@ ion-content {
   -webkit-tap-highlight-color: transparent;
   transition: transform 0.15s;
 }
-.reset-btn:active { transform: scale(0.96); }
-.reset-icon { font-size: 16px; }
+.reset-btn:active {
+  transform: scale(0.96);
+}
+.reset-icon {
+  font-size: 16px;
+}
 
 /* ─── Footer ────────────────────────────────────── */
 .footer-text {
@@ -612,7 +656,9 @@ ion-content {
   color: #64748b;
 }
 
-.modal-content { --background: #f0f4f8; }
+.modal-content {
+  --background: #f0f4f8;
+}
 
 .modal-body {
   padding: 20px 16px;
@@ -646,11 +692,15 @@ ion-content {
   border: none;
   border-radius: 16px;
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(37,99,235,0.3);
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3);
   transition: transform 0.15s ease;
   -webkit-tap-highlight-color: transparent;
 }
 
-.modal-save-btn:active { transform: scale(0.97); }
-.modal-save-btn ion-icon { font-size: 18px; }
+.modal-save-btn:active {
+  transform: scale(0.97);
+}
+.modal-save-btn ion-icon {
+  font-size: 18px;
+}
 </style>

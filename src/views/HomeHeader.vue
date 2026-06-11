@@ -8,8 +8,14 @@
           <h2 class="greeting-name">{{ showuser }}</h2>
           <p class="greeting-app">Welcome to ERP SMB</p>
         </div>
-        <div class="avatar-circle">
-          <span class="avatar-initial">{{ avatarInitial }}</span>
+        <div class="avatar-circle" @click="goToProfile">
+          <img
+            v-if="avatarUrl"
+            :src="avatarUrl"
+            class="avatar-img"
+            @error="avatarUrl = null"
+          />
+          <span v-else class="avatar-initial">{{ avatarInitial }}</span>
         </div>
       </div>
 
@@ -84,6 +90,11 @@ export default {
     const timeOut = ref(null);
     const seterAbsenmasuk = ref(null);
     const dd = ref(null);
+    const avatarUrl = ref(null);
+
+    const goToProfile = () => {
+      router.push("/profile");
+    };
 
     const avatarInitial = computed(() => {
       if (!showuser.value) return "?";
@@ -144,6 +155,7 @@ export default {
       loadAbsensi();
       const parseUser = JSON.parse(getUser);
       showuser.value = parseUser.description;
+      avatarUrl.value = parseUser.avatar || null;
     });
 
     return {
@@ -165,6 +177,8 @@ export default {
       dd,
       absenMasuk,
       avatarInitial,
+      avatarUrl,
+      goToProfile,
     };
   },
 };
@@ -292,5 +306,22 @@ export default {
 .status-badge strong {
   font-weight: 700;
   color: #ffffff;
+}
+/* Avatar foto */
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* Avatar circle — tambah cursor pointer */
+.avatar-circle {
+  cursor: pointer;
+}
+
+/* Header card — radius siku */
+.header-card {
+  border-radius: 0; /* ← dari 0 0 28px 28px */
 }
 </style>

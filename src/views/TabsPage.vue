@@ -10,6 +10,17 @@
           <ion-label>Home</ion-label>
         </ion-tab-button>
 
+        <!-- ── Notifikasi Tab ── -->
+        <ion-tab-button tab="notifications" href="/notifications">
+          <div class="tab-icon-wrap notif-wrap">
+            <ion-icon :icon="notificationsSharp" />
+            <span v-if="unreadCount > 0" class="notif-badge">
+              {{ unreadCount > 99 ? "99+" : unreadCount }}
+            </span>
+          </div>
+          <ion-label>Notifikasi</ion-label>
+        </ion-tab-button>
+
         <ion-tab-button tab="profile" href="/profile">
           <div class="tab-icon-wrap">
             <ion-icon :icon="personSharp" />
@@ -29,6 +40,7 @@
 </template>
 
 <script setup lang="ts">
+import { ref, onMounted, onUnmounted } from "vue";
 import api from "@/services/api";
 import { showToast } from "@/services/toastHandlers";
 import {
@@ -39,24 +51,56 @@ import {
   IonIcon,
   IonPage,
   IonRouterOutlet,
-  IonTitle,
-  IonToolbar,
   alertController,
   useIonRouter,
 } from "@ionic/vue";
-import { homeSharp, personSharp, logOutSharp } from "ionicons/icons";
-import router from "@/router";
+import {
+  homeSharp,
+  personSharp,
+  logOutSharp,
+  notificationsSharp,
+} from "ionicons/icons";
+import { removeFcmToken } from '@/services/fcmService';
+import { Capacitor } from '@capacitor/core';
 
-const getUser = localStorage.getItem("master_user");
 const ionRouter = useIonRouter();
+const getUser = localStorage.getItem("master_user");
+const userData = JSON.parse(getUser || "{}");
+const unreadCount = ref(0);
+let poolInterval: ReturnType<typeof setInterval> | null = null;
 
+// ── Fetch unread count ─────────────────────────────
+const fetchUnreadCount = async () => {
+  try {
+    const token = localStorage.getItem("access_token");
+    const res = await api.get(`/notifications/${userData.user}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const notifs = res.data?.data || [];
+    unreadCount.value = notifs.filter((n: any) => !n.fields.is_read).length;
+  } catch (e) {
+    console.error("Gagal fetch notif count:", e);
+  }
+};
+
+// ── Polling tiap 30 detik ──────────────────────────
+onMounted(() => {
+  fetchUnreadCount();
+  poolInterval = setInterval(fetchUnreadCount, 30000);
+});
+
+onUnmounted(() => {
+  if (poolInterval) clearInterval(poolInterval);
+});
+
+// ── Logout ─────────────────────────────────────────
 const logout = async () => {
   try {
-    localStorage.removeItem("access_token");
-    localStorage.removeItem("master_user");
-    localStorage.clear();
+    if (Capacitor.isNativePlatform()) {
+      await removeFcmToken();
+    }
 
-    // router.replace("/login");
+    localStorage.clear();
     ionRouter.navigate("/login", "root", "replace");
     await showToast("Logout Berhasil. Sampai Bertemu Lagi!", "primary");
   } catch (error) {
@@ -71,17 +115,11 @@ const showLogoutConfirm = async () => {
     message: "Apakah Anda yakin ingin logout?",
     cssClass: "logout-alert",
     buttons: [
-      {
-        text: "Batal",
-        role: "cancel",
-        cssClass: "alert-btn-cancel",
-      },
+      { text: "Batal", role: "cancel", cssClass: "alert-btn-cancel" },
       {
         text: "Logout",
         cssClass: "alert-btn-logout",
-        handler: async () => {
-          await logout();
-        },
+        handler: async () => await logout(),
       },
     ],
   });
@@ -90,7 +128,6 @@ const showLogoutConfirm = async () => {
 </script>
 
 <style scoped>
-/* ─── Tab Bar ───────────────────────────────────── */
 ion-tab-bar {
   --background: #ffffff;
   --border: none;
@@ -101,7 +138,6 @@ ion-tab-bar {
   border-top: 1px solid #f1f5f9;
 }
 
-/* ─── Tab Button ────────────────────────────────── */
 ion-tab-button {
   --color: #94a3b8;
   --color-selected: #2563eb;
@@ -122,8 +158,8 @@ ion-tab-button ion-label {
   margin-top: 2px;
 }
 
-/* ─── Icon Wrap ─────────────────────────────────── */
 .tab-icon-wrap {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -138,7 +174,6 @@ ion-tab-button ion-label {
   transition: transform 0.2s ease;
 }
 
-/* ─── Active State ──────────────────────────────── */
 ion-tab-button.tab-selected .tab-icon-wrap,
 ion-tab-button[aria-selected="true"] .tab-icon-wrap {
   background: #eff6ff;
@@ -149,7 +184,30 @@ ion-tab-button[aria-selected="true"] .tab-icon-wrap ion-icon {
   transform: scale(1.1);
 }
 
-/* ─── Logout Tab ────────────────────────────────── */
+/* ── Badge merah unread ── */
+.notif-wrap {
+  position: relative;
+}
+
+.notif-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 800;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  border: 2px solid #fff;
+  line-height: 1;
+}
+
 .logout-wrap ion-icon {
   color: #ef4444;
 }
@@ -158,76 +216,11 @@ ion-tab-button:last-child {
   --color: #ef4444;
   --color-selected: #ef4444;
 }
-
 ion-tab-button:last-child ion-label {
   color: #ef4444;
 }
 
-/* Tap feedback */
 ion-tab-button:active .tab-icon-wrap {
   transform: scale(0.92);
-}
-</style>
-
-<style>
-/* ─── Logout Alert ──────────────────────────────── */
-.logout-alert .alert-wrapper {
-  border-radius: 20px !important;
-  overflow: hidden;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18) !important;
-}
-
-.logout-alert .alert-head {
-  background: linear-gradient(135deg, #7f1d1d 0%, #ef4444 100%) !important;
-  padding: 18px 20px 14px !important;
-}
-
-.logout-alert .alert-title {
-  color: #ffffff !important;
-  font-size: 17px !important;
-  font-weight: 800 !important;
-  letter-spacing: -0.2px;
-}
-
-.logout-alert .alert-message {
-  color: #334155 !important;
-  font-size: 14px !important;
-  font-weight: 500 !important;
-  line-height: 1.6 !important;
-  padding: 16px 20px !important;
-}
-
-.logout-alert .alert-button-group {
-  padding: 4px 12px 12px !important;
-  gap: 8px;
-  display: flex;
-}
-
-/* Tombol Batal */
-.logout-alert .alert-btn-cancel {
-  flex: 1;
-  border-radius: 12px !important;
-  background: #f1f5f9 !important;
-  font-weight: 700 !important;
-  font-size: 14px !important;
-}
-
-.logout-alert .alert-btn-cancel .alert-button-inner {
-  color: #64748b !important;
-  justify-content: center;
-}
-
-/* Tombol Logout */
-.logout-alert .alert-btn-logout {
-  flex: 1;
-  border-radius: 12px !important;
-  background: linear-gradient(135deg, #dc2626, #ef4444) !important;
-  font-weight: 700 !important;
-  font-size: 14px !important;
-}
-
-.logout-alert .alert-btn-logout .alert-button-inner {
-  color: #ffffff !important;
-  justify-content: center;
 }
 </style>
