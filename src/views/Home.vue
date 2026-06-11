@@ -57,7 +57,7 @@
             <div class="action-icon-wrap resi-icon-bg">
               <ion-icon :icon="barcodeOutline"></ion-icon>
             </div>
-            <span class="action-title">Scan Resi</span>
+            <span class="action-title">Scan Pickup</span>
           </button>
 
           <button

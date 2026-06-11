@@ -338,6 +338,60 @@ function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+const compressBase64 = (base64Str, maxWidth = 1024, maxHeight = 1024, quality = 0.7) => {
+  return new Promise((resolve, reject) => {
+    if (!base64Str) {
+      return reject(new Error("String Base64 kosong"));
+    }
+
+    // 💡 LANGKAH PENGAMANAN: Bersihkan spasi, enter, atau karakter aneh di ujung string
+    let cleanedBase64 = base64Str.trim().replace(/[\r\n]/g, "");
+
+    const img = new Image();
+    
+    // Cek apakah sudah ada prefix data URL-nya
+    if (cleanedBase64.startsWith('data:image')) {
+      img.src = cleanedBase64;
+    } else {
+      img.src = `data:image/jpeg;base64,${cleanedBase64}`;
+    }
+    
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let width = img.width;
+      let height = img.height;
+
+      // Logika mempertahankan aspek rasio gambar
+      if (width > height) {
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+      } else {
+        if (height > maxHeight) {
+          width = Math.round((width * maxHeight) / height);
+          height = maxHeight;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+
+      // Ambil hasil kompresi dengan format JPEG
+      const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+      resolve(compressedBase64);
+    };
+
+    img.onerror = (err) => {
+      console.error("Error saat memuat gambar ke objek Image:", err);
+      reject(err);
+    };
+  });
+};
+
 const submitAbsen = async () => {
   loading.value = true;
   try {
@@ -382,12 +436,29 @@ const submitAbsen = async () => {
     );
     absenData.append("address_in", dataPosition.value);
 
-    const blob = base64ToBlob(rawBase64.value, "image/jpeg");
+    let blob = base64ToBlob(rawBase64.value, "image/jpeg");
     if (!blob || blob.size === 0) {
       await showToast("File gambar tidak valid!", "danger");
       loading.value = false;
       return;
     }
+
+    try {
+      const cleanedBase64 = rawBase64.value.trim().replace(/[\r\n]/g, "");
+      const compressedBase64 = await compressBase64(cleanedBase64, 1024, 1024, 0.7);
+      
+      let pureBase64 = compressedBase64;
+      if (compressedBase64.includes(",")) {
+        pureBase64 = compressedBase64.split(",")[1]; // Ambil data setelah tanda koma (string murninya)
+      }
+      
+      blob = base64ToBlob(pureBase64, "image/jpeg");
+      // console.log("🔥 Kompresi sukses! Ukuran blob baru:", blob.size);
+      
+    } catch (compressErr) {
+      console.error("Gagal kompres gambar, sistem otomatis menggunakan file asli:", compressErr);
+    }
+
     absenData.append("images_in", blob, fileName.value);
 
     const apiBase = import.meta.env.VITE_BASE_URL;

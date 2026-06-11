@@ -103,7 +103,7 @@
 
           <!-- Footer -->
           <p class="footer-text">
-            © FAH Software 2025. All rights reserved.<br />Versi 2.0.4
+            © FAH Software 2025. All rights reserved.<br />Versi 2.0.5
           </p>
         </div>
       </div>
