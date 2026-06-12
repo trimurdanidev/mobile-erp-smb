@@ -32,22 +32,11 @@
           </div>
           <div class="video-wrap">
             <img
-              v-if="selfieTaken && !isCameraOpen"
+              v-if="selfieTaken"
               :src="selfieImage"
               class="video-feed"
               alt="Preview Selfie"
             />
-
-            <video
-              v-else-if="isCameraOpen"
-              ref="videoSelfieRef"
-              autoplay
-              playsinline
-              muted
-              class="video-feed"
-              style="transform: scaleX(-1); object-fit: cover"
-            ></video>
-
             <div v-else class="camera-placeholder">
               <div class="cam-pulse-ring"></div>
               <div class="cam-circle">
@@ -60,29 +49,17 @@
               <span class="cam-hint-badge">Tap "Buka Kamera" untuk mulai</span>
             </div>
 
-            <div v-if="selfieTaken && !isCameraOpen" class="selfie-taken-badge">
+            <div v-if="selfieTaken" class="selfie-taken-badge">
               <ion-icon :icon="checkmarkCircleOutline"></ion-icon>
               Selfie diambil
             </div>
           </div>
-
-          <button
-            v-if="isCameraOpen"
-            class="selfie-btn"
-            @click="captureSelfieWeb"
-          >
-            <ion-icon
-              :icon="checkmarkCircleOutline"
-              class="selfie-btn-icon"
-            ></ion-icon>
-            Jepret Foto
-          </button>
-
-          <button v-else class="selfie-btn" @click="takeSelfieNative">
+          <button class="selfie-btn" @click="takeSelfieNative">
             <ion-icon :icon="cameraOutline" class="selfie-btn-icon"></ion-icon>
             {{ selfieTaken ? "Ambil Ulang Selfie" : "Buka Kamera" }}
           </button>
         </div>
+
         <div class="info-card">
           <div class="info-card-header">
             <ion-icon
@@ -215,9 +192,6 @@ const phone = ref(null);
 const nik = ref(null);
 const description = ref(null);
 const department_name = ref(null);
-const isCameraOpen = ref(false);
-const videoSelfieRef = (ref < HTMLVideoElement) | (null > null);
-let localStream = ref(null);
 
 // ── Functions ─────────────────────────────────────
 const getCurrentDateTime = () => {
@@ -246,39 +220,16 @@ const time = () => {
 
 const getLocation = async () => {
   try {
-    // 💡 DETEKSI PLATFORM: Jika dijalankan di Browser Web / PWA (Bukan Native App Android)
-    if (!window.Capacitor || !window.Capacitor.isNativePlatform()) {
-      console.log("Menggunakan HTML5 Browser Geolocation untuk Web...");
-
-      if (!navigator.geolocation) {
-        throw new Error("Browser Anda tidak mendukung fitur Geolocation.");
-      }
-
-      // ── PERBAIKAN DI SINI: Sintaks Promise dibuat super clean & standard ──
-      const position = await new Promise((res, rej) => {
-        navigator.geolocation.getCurrentPosition(res, rej, {
-          enableHighAccuracy: true,
-          timeout: 15000,
-          maximumAge: 0,
-        });
-      });
-
-      latitude.value = position.coords.latitude;
-      longitude.value = position.coords.longitude;
-      return; // Selesai, bypass alur native di bawah
-    }
-
-    // ── JALUR NATIVE ANDROID APP (Kode Asli Kamu Tetap Dipertahankan) ──
-    console.log("Menggunakan Capacitor Geolocation untuk Native App...");
-
+    // 1. Minta izin dulu secara native
     const permission = await Geolocation.requestPermissions();
     if (
       permission.location !== "granted" &&
       permission.coarseLocation !== "granted"
     ) {
-      throw new Error("Izin lokasi ditolak oleh sistem perangkat.");
+      throw new Error("Izin lokasi ditolak");
     }
 
+    // 2. Ambil posisi via Capacitor (bukan browser geolocation)
     const position = await Geolocation.getCurrentPosition({
       enableHighAccuracy: true,
       timeout: 15000,
@@ -287,7 +238,7 @@ const getLocation = async () => {
     latitude.value = position.coords.latitude;
     longitude.value = position.coords.longitude;
   } catch (error) {
-    throw error; // ← Tetap dilempar ke fetchData bawaanmu
+    throw error; // ← lempar ke fetchData untuk ditangani
   }
 };
 
@@ -316,16 +267,13 @@ const fetchData = async () => {
   }
 };
 
+// ── Alur Kamera Native & Permission ──
 const takeSelfieNative = async () => {
-  // 💡 DETEKSI DEVICE: Jika tidak ada native device platform (berarti dibuka via Browser Web/PWA)
-  if (!window.Capacitor || !window.Capacitor.isNativePlatform()) {
-    await openSelfieCameraWeb();
-    return;
-  }
-
-  // ── JALUR A: ANDROID NATIVE APP (Kode Asli Kamu Tetap Dipertahankan) ──
   try {
+    // 1. Cek status permission native saat ini
     const status = await Camera.checkPermissions();
+
+    // 2. Jika permission belum diberikan, minta secara native
     if (status.camera !== "granted") {
       const requestStatus = await Camera.requestPermissions({
         permissions: ["camera"],
@@ -336,94 +284,23 @@ const takeSelfieNative = async () => {
       }
     }
 
+    // 3. Jalankan kamera native (Directly open front camera)
     const image = await Camera.getPhoto({
       quality: 85,
       allowEditing: false,
-      resultType: CameraResultType.Base64,
-      source: CameraSource.Camera,
-      direction: "front",
+      resultType: CameraResultType.Base64, // Kita minta base64 murni agar konversi ke Blob mudah
+      source: CameraSource.Camera, // Membuka modul kamera langsung
+      direction: "front", // Request menggunakan kamera depan (Selfie)
     });
 
+    // 4. Simpan hasil foto ke state
     rawBase64.value = image.base64String;
     selfieImage.value = `data:image/jpeg;base64,${image.base64String}`;
     selfieTaken.value = true;
   } catch (error) {
     console.error("Kamera dibatalkan/error:", error);
+    // User menekan tombol back native tanpa mengambil foto akan masuk ke catch block ini
   }
-};
-
-const openSelfieCameraWeb = async () => {
-  try {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      await showToast(
-        "Kamera tidak didukung atau pastikan menggunakan HTTPS.",
-        "danger"
-      );
-      return;
-    }
-
-    selfieTaken.value = false;
-    isCameraOpen.value = true; // Flag untuk memunculkan tag <video> di HTML
-
-    localStream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: "user", // Paksa kamera depan
-        width: { ideal: 640 },
-        height: { ideal: 480 },
-      },
-      audio: false,
-    });
-
-    setTimeout(() => {
-      if (videoSelfieRef.value) {
-        videoSelfieRef.value.srcObject = localStream;
-      }
-    }, 100);
-  } catch (err) {
-    isCameraOpen.value = false;
-    console.error("Gagal membuka kamera web:", err);
-    await showToast("Gagal akses kamera: " + (err.message || err), "danger");
-  }
-};
-
-const captureSelfieWeb = () => {
-  if (!videoSelfieRef.value || !localStream) return;
-
-  const video = videoSelfieRef.value;
-  const canvas = document.createElement("canvas");
-
-  canvas.width = video.videoWidth || 640;
-  canvas.height = video.videoHeight || 480;
-
-  const ctx = canvas.getContext("2d");
-  if (ctx) {
-    // Efek mirror pas simpan foto agar tidak kebalik kiri-kanan
-    ctx.translate(canvas.width, 0);
-    ctx.scale(-1, 1);
-
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
-
-    // SESUAIKAN DENGAN SKEMA VARIABEL LAMA KAMU
-    selfieImage.value = dataUrl;
-    rawBase64.value = dataUrl.replace(/^data:image\/[a-z]+;base64,/, "");
-    selfieTaken.value = true;
-
-    // Matikan kamera setelah dijepret
-    closeSelfieCameraWeb();
-  }
-};
-
-const closeSelfieCameraWeb = () => {
-  if (localStream) {
-    localStream.getTracks().forEach((track) => track.stop());
-    localStream = null;
-  }
-  if (videoSelfieRef.value) {
-    videoSelfieRef.value.srcObject = null;
-  }
-  isCameraOpen.value = false;
 };
 
 // Fungsi helper konversi Base64 murni ke Blob berkas biner
@@ -461,12 +338,7 @@ function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-const compressBase64 = (
-  base64Str,
-  maxWidth = 1024,
-  maxHeight = 1024,
-  quality = 0.7
-) => {
+const compressBase64 = (base64Str, maxWidth = 1024, maxHeight = 1024, quality = 0.7) => {
   return new Promise((resolve, reject) => {
     if (!base64Str) {
       return reject(new Error("String Base64 kosong"));
@@ -476,16 +348,16 @@ const compressBase64 = (
     let cleanedBase64 = base64Str.trim().replace(/[\r\n]/g, "");
 
     const img = new Image();
-
+    
     // Cek apakah sudah ada prefix data URL-nya
-    if (cleanedBase64.startsWith("data:image")) {
+    if (cleanedBase64.startsWith('data:image')) {
       img.src = cleanedBase64;
     } else {
       img.src = `data:image/jpeg;base64,${cleanedBase64}`;
     }
-
+    
     img.onload = () => {
-      const canvas = document.createElement("canvas");
+      const canvas = document.createElement('canvas');
       let width = img.width;
       let height = img.height;
 
@@ -505,11 +377,11 @@ const compressBase64 = (
       canvas.width = width;
       canvas.height = height;
 
-      const ctx = canvas.getContext("2d");
+      const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, width, height);
 
       // Ambil hasil kompresi dengan format JPEG
-      const compressedBase64 = canvas.toDataURL("image/jpeg", quality);
+      const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
       resolve(compressedBase64);
     };
 
@@ -573,25 +445,18 @@ const submitAbsen = async () => {
 
     try {
       const cleanedBase64 = rawBase64.value.trim().replace(/[\r\n]/g, "");
-      const compressedBase64 = await compressBase64(
-        cleanedBase64,
-        1024,
-        1024,
-        0.7
-      );
-
+      const compressedBase64 = await compressBase64(cleanedBase64, 1024, 1024, 0.7);
+      
       let pureBase64 = compressedBase64;
       if (compressedBase64.includes(",")) {
         pureBase64 = compressedBase64.split(",")[1]; // Ambil data setelah tanda koma (string murninya)
       }
-
+      
       blob = base64ToBlob(pureBase64, "image/jpeg");
       // console.log("🔥 Kompresi sukses! Ukuran blob baru:", blob.size);
+      
     } catch (compressErr) {
-      console.error(
-        "Gagal kompres gambar, sistem otomatis menggunakan file asli:",
-        compressErr
-      );
+      console.error("Gagal kompres gambar, sistem otomatis menggunakan file asli:", compressErr);
     }
 
     absenData.append("images_in", blob, fileName.value);
