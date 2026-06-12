@@ -201,13 +201,12 @@ import {
   closeCircleOutline,
   checkmarkOutline,
   listOutline,
-  barcodeOutline,
+  barcodeOutline
 } from "ionicons/icons";
 import { ref, onUnmounted } from "vue";
 import api from "@/services/api";
 import { showToast } from "@/services/toastHandlers";
 import { playBeep } from "@/services/audioService";
-import { Html5Qrcode } from "html5-qrcode";
 
 // ── State ──────────────────────────────────────────
 const packingNo = ref("");
@@ -224,7 +223,6 @@ const scannedBy = userData.user || "unknown";
 // ── Scanner ────────────────────────────────────────
 let stream: MediaStream | null = null;
 let scanInterval: any = null;
-let html5QrcodeScanner: Html5Qrcode | null = null;
 
 const toggleScan = async () => {
   if (isScanning.value) stopScan();
@@ -233,118 +231,42 @@ const toggleScan = async () => {
 
 const startScan = async () => {
   try {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      await showToast(
-        "Kamera tidak tersedia. Pastikan akses via HTTPS.",
-        "danger"
-      );
-      return;
-    }
-
-    // ── Coba kamera belakang dengan exact dulu ─────
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { exact: "environment" },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-      });
-    } catch (exactErr) {
-      // ── Fallback: tanpa exact (untuk emulator/device tertentu) ──
-      console.warn("exact environment gagal, fallback:", exactErr);
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
-      });
-    }
-
-    if (videoRef.value) {
-      videoRef.value.srcObject = stream;
-      await videoRef.value.play();
-    }
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "environment" },
+    });
+    if (videoRef.value) videoRef.value.srcObject = stream;
     isScanning.value = true;
 
-    // ── KONDISI 1: JIKA DEVICE MENDUKUNG BARCODEDETECTOR NATIVE (Android / Chrome Desktop) ──
     if ("BarcodeDetector" in window) {
       const detector = new (window as any).BarcodeDetector({
-        formats: [
-          "code_128",
-          "code_39",
-          "ean_13",
-          "ean_8",
-          "qr_code",
-          "data_matrix",
-        ],
+        formats: ["code_128", "code_39", "ean_13", "ean_8", "qr_code"],
       });
 
       scanInterval = setInterval(async () => {
         if (!videoRef.value || videoRef.value.readyState < 2) return;
-        if (isProcessing.value) return;
+        if (isProcessing.value) return; // ← skip kalau sedang proses
+
         try {
           const barcodes = await detector.detect(videoRef.value);
           if (barcodes.length > 0) {
-            await submitResiAuto(barcodes[0].rawValue);
+            const scanned = barcodes[0].rawValue;
+            await submitPackingAuto(scanned); // ← langsung hit API
           }
         } catch (_) {}
       }, 500);
-
-      // ── KONDISI 2: FALLBACK UNTUK IPHONE / SAFARI (Menggunakan html5-qrcode) ──
     } else {
-      console.warn(
-        "BarcodeDetector tidak didukung, menggunakan fallback html5-qrcode untuk iPhone."
-      );
-
-      // Pastikan Anda punya ID element pembungkus video, atau pasang langsung ke video element jika disupport.
-      // Di sini kita asumsikan videoRef Anda memiliki id atau kita buat instance scan dari stream yang ada.
-      // Pendekatan terbaik html5-qrcode untuk local stream:
-
-      const elementId = "video-container-id"; // ← Ganti dengan ID tag pembungkus <video> Anda atau elemen kosong khusus scan
-
-      html5QrcodeScanner = new Html5Qrcode(elementId);
-
-      // Menggunakan konfigurasi FPS dan QR Box
-      const config = {
-        fps: 10,
-        qrbox: (width: number, height: number) => {
-          return { width: width * 0.7, height: height * 0.7 }; // area scan kotak di tengah
-        },
-      };
-
-      // Jalankan scanner khusus menggunakan camera facingMode 'environment'
-      await html5QrcodeScanner.start(
-        { facingMode: "environment" },
-        config,
-        async (decodedText) => {
-          // Callback ketika barcode berhasil terdeteksi
-          if (isProcessing.value) return;
-          await submitResiAuto(decodedText);
-        },
-        () => {
-          // Callback saat gagal mendeteksi di frame tersebut (bisa diabaikan agar tidak spam log)
-        }
+      await showToast(
+        "Scanner aktif. Input manual jika tidak terdeteksi.",
+        "warning"
       );
     }
-  } catch (err: any) {
-    console.error("Kamera error:", err);
-    await showToast("Gagal akses kamera: " + (err.message || err), "danger");
+  } catch (err) {
+    await showToast("Gagal akses kamera", "danger");
   }
 };
 
-const stopScan = async () => {
+const stopScan = () => {
   if (scanInterval) clearInterval(scanInterval);
-
-  // ── MODIFIKASI: Matikan scanner html5-qrcode jika sedang aktif (untuk iPhone) ──
-  if (html5QrcodeScanner) {
-    try {
-      if (html5QrcodeScanner.isScanning) {
-        await html5QrcodeScanner.stop();
-      }
-    } catch (err) {
-      console.error("Gagal menghentikan html5QrcodeScanner:", err);
-    }
-    html5QrcodeScanner = null; // Reset ke null setelah di-stop
-  }
-
   if (stream) {
     stream.getTracks().forEach((t) => t.stop());
     stream = null;
@@ -797,11 +719,7 @@ ion-content {
   content: "";
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(
-    circle,
-    rgba(255, 255, 255, 0.06) 1px,
-    transparent 1px
-  );
+  background-image: radial-gradient(circle, rgba(255,255,255,0.06) 1px, transparent 1px);
   background-size: 20px 20px;
   pointer-events: none;
 }
@@ -817,18 +735,9 @@ ion-content {
 }
 
 @keyframes barcodePulse {
-  0% {
-    transform: scale(0.85);
-    opacity: 0.8;
-  }
-  70% {
-    transform: scale(1.6);
-    opacity: 0;
-  }
-  100% {
-    transform: scale(0.85);
-    opacity: 0;
-  }
+  0%   { transform: scale(0.85); opacity: 0.8; }
+  70%  { transform: scale(1.6);  opacity: 0; }
+  100% { transform: scale(0.85); opacity: 0; }
 }
 
 /* Icon circle */
@@ -840,7 +749,8 @@ ion-content {
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 0 0 8px rgba(37, 99, 235, 0.15),
+  box-shadow:
+    0 0 0 8px rgba(37, 99, 235, 0.15),
     0 8px 24px rgba(37, 99, 235, 0.4);
   z-index: 1;
   margin-bottom: 14px;
@@ -849,7 +759,7 @@ ion-content {
 .placeholder-icon {
   font-size: 34px;
   color: #ffffff;
-  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.3));
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.3));
 }
 
 .cam-placeholder-text {
