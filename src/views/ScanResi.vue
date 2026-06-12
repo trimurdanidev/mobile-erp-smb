@@ -25,10 +25,14 @@
               class="scan-section-icon"
             ></ion-icon>
             <span class="scan-section-title">Barcode Resi</span>
+            <!-- Badge info engine yang aktif -->
+            <span class="engine-badge" v-if="isScanning">
+              {{ scanEngine }}
+            </span>
           </div>
 
           <div class="camera-box" :class="{ 'camera-active': isScanning }">
-            <!-- Video HANYA tampil saat scanning, cegah icon play default Android -->
+            <!-- Video element — dipakai oleh kedua engine -->
             <video
               ref="videoRef"
               class="camera-video"
@@ -37,6 +41,9 @@
               playsinline
               muted
             ></video>
+
+            <!-- Canvas tersembunyi — dipakai ZXing untuk capture frame -->
+            <canvas ref="canvasRef" class="canvas-hidden"></canvas>
 
             <!-- Scan overlay -->
             <div class="scan-overlay" v-if="isScanning">
@@ -47,7 +54,7 @@
               <div class="scan-corner br"></div>
             </div>
 
-            <!-- Placeholder modern (hanya tampil saat tidak scanning) -->
+            <!-- Placeholder (tampil saat tidak scanning) -->
             <div class="camera-placeholder" v-if="!isScanning">
               <div class="barcode-pulse-ring"></div>
               <div class="barcode-circle">
@@ -174,91 +181,194 @@ const resiNo = ref("");
 const loading = ref(false);
 const isScanning = ref(false);
 const videoRef = ref<HTMLVideoElement | null>(null);
+const canvasRef = ref<HTMLCanvasElement | null>(null);
 const lastResult = ref<any>(null);
-const isProcessing = ref(false); // ← tambah: cegah double hit API
+const isProcessing = ref(false);
+const scanEngine = ref(""); // "Native" | "ZXing"
 
 const userData = JSON.parse(localStorage.getItem("master_user") || "{}");
 const scannedBy = userData.user || "unknown";
 
-// ── Scanner ────────────────────────────────────────
+// ── Internal scanner state ─────────────────────────
 let stream: MediaStream | null = null;
 let scanInterval: any = null;
+let zxingReader: any = null; // instance ZXingBrowser.BrowserMultiFormatReader
 
-const startScan = async () => {
-  try {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      await showToast(
-        "Kamera tidak tersedia. Pastikan akses via HTTPS.",
-        "danger"
-      );
-      return;
-    }
+// ── Deteksi support BarcodeDetector (Chrome / Android) ─
+const isBarcodeDetectorSupported = (): boolean => {
+  return typeof (window as any).BarcodeDetector !== "undefined";
+};
 
-    // ── Coba kamera belakang dengan exact dulu ─────
+// ── Buka stream kamera (cross-browser) ────────────
+const openCamera = async (): Promise<boolean> => {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    await showToast(
+      "Kamera tidak tersedia. Pastikan akses via HTTPS.",
+      "danger"
+    );
+    return false;
+  }
+
+  // Coba kamera belakang (environment) dengan exact, fallback tanpa exact
+  const constraints: MediaStreamConstraints[] = [
+    {
+      video: {
+        facingMode: { exact: "environment" },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+    },
+    { video: { facingMode: "environment" } },
+    { video: true }, // last resort — any camera
+  ];
+
+  for (const constraint of constraints) {
     try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { exact: "environment" }, // ← kamera belakang paksa
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-      });
-    } catch (exactErr) {
-      // ── Fallback: tanpa exact (untuk emulator/device tertentu) ──
-      console.warn("exact environment gagal, fallback:", exactErr);
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
-      });
+      stream = await navigator.mediaDevices.getUserMedia(constraint);
+      break;
+    } catch (e) {
+      console.warn("Coba constraint berikutnya:", e);
     }
+  }
 
-    if (videoRef.value) {
-      videoRef.value.srcObject = stream;
-      await videoRef.value.play(); // ← paksa play di Android
-    }
-    isScanning.value = true;
+  if (!stream) {
+    await showToast(
+      "Gagal akses kamera. Pastikan izin kamera sudah diberikan.",
+      "danger"
+    );
+    return false;
+  }
 
-    if ("BarcodeDetector" in window) {
-      const detector = new (window as any).BarcodeDetector({
-        formats: [
-          "code_128",
-          "code_39",
-          "ean_13",
-          "ean_8",
-          "qr_code",
-          "data_matrix",
-        ],
-      });
-
-      scanInterval = setInterval(async () => {
-        if (!videoRef.value || videoRef.value.readyState < 2) return;
-        if (isProcessing.value) return;
-        try {
-          const barcodes = await detector.detect(videoRef.value);
-          if (barcodes.length > 0) {
-            await submitResiAuto(barcodes[0].rawValue);
-          }
-        } catch (_) {}
-      }, 500);
-    } else {
-      await showToast(
-        "BarcodeDetector tidak didukung. Gunakan Chrome terbaru.",
-        "warning"
+  if (videoRef.value) {
+    videoRef.value.srcObject = stream;
+    // iOS Safari kadang perlu dipaksa play setelah srcObject di-set
+    try {
+      await videoRef.value.play();
+    } catch (playErr) {
+      console.warn(
+        "Video play error (aman di-ignore di beberapa device):",
+        playErr
       );
     }
-  } catch (err: any) {
-    console.error("Kamera error:", err);
-    await showToast("Gagal akses kamera: " + (err.message || err), "danger");
+  }
+
+  return true;
+};
+
+// ── Engine 1: Native BarcodeDetector (Chrome/Android) ─
+const startNativeScanner = async () => {
+  scanEngine.value = "Native";
+
+  const detector = new (window as any).BarcodeDetector({
+    formats: [
+      "code_128",
+      "code_39",
+      "ean_13",
+      "ean_8",
+      "qr_code",
+      "data_matrix",
+    ],
+  });
+
+  scanInterval = setInterval(async () => {
+    if (!videoRef.value || videoRef.value.readyState < 2) return;
+    if (isProcessing.value) return;
+    try {
+      const barcodes = await detector.detect(videoRef.value);
+      if (barcodes.length > 0) {
+        await submitResiAuto(barcodes[0].rawValue);
+      }
+    } catch (_) {}
+  }, 500);
+};
+
+// ── Engine 2: ZXing (iOS Safari, Firefox, dll) ────
+const startZXingScanner = async () => {
+  scanEngine.value = "ZXing";
+
+  try {
+    // Dynamic import — hanya load kalau dibutuhkan
+    const ZXingBrowser = await import("@zxing/browser");
+    const ZXingLibrary = await import("@zxing/library");
+
+    // Hints: aktifkan semua format barcode 1D + 2D yang relevan
+    const hints = new Map();
+    hints.set(ZXingLibrary.DecodeHintType.POSSIBLE_FORMATS, [
+      ZXingLibrary.BarcodeFormat.CODE_128,
+      ZXingLibrary.BarcodeFormat.CODE_39,
+      ZXingLibrary.BarcodeFormat.EAN_13,
+      ZXingLibrary.BarcodeFormat.EAN_8,
+      ZXingLibrary.BarcodeFormat.QR_CODE,
+      ZXingLibrary.BarcodeFormat.DATA_MATRIX,
+      ZXingLibrary.BarcodeFormat.ITF,
+    ]);
+
+    zxingReader = new ZXingBrowser.BrowserMultiFormatReader(hints, {
+      delayBetweenScanAttempts: 300,
+    });
+
+    // Decode terus-menerus dari video element
+    zxingReader.decodeFromVideoElement(
+      videoRef.value,
+      async (result: any, err: any) => {
+        if (result && !isProcessing.value) {
+          await submitResiAuto(result.getText());
+        }
+        // err di sini normal (NotFoundException tiap frame kosong) — abaikan
+      }
+    );
+  } catch (importErr) {
+    console.error("Gagal load ZXing:", importErr);
+    await showToast(
+      "Scanner tidak dapat dimuat. Coba gunakan Input Manual.",
+      "warning"
+    );
   }
 };
 
+// ── Start scan ─────────────────────────────────────
+const startScan = async () => {
+  const cameraOk = await openCamera();
+  if (!cameraOk) return;
+
+  isScanning.value = true;
+
+  if (isBarcodeDetectorSupported()) {
+    await startNativeScanner();
+  } else {
+    // Fallback ZXing untuk iOS Safari / Firefox
+    await startZXingScanner();
+  }
+};
+
+// ── Stop scan ──────────────────────────────────────
 const stopScan = () => {
-  if (scanInterval) clearInterval(scanInterval);
+  // Hentikan interval native
+  if (scanInterval) {
+    clearInterval(scanInterval);
+    scanInterval = null;
+  }
+
+  // Hentikan ZXing decoder
+  if (zxingReader) {
+    try {
+      zxingReader.reset();
+    } catch (_) {}
+    zxingReader = null;
+  }
+
+  // Matikan stream kamera
   if (stream) {
     stream.getTracks().forEach((t) => t.stop());
     stream = null;
   }
-  if (videoRef.value) videoRef.value.srcObject = null;
+
+  if (videoRef.value) {
+    videoRef.value.srcObject = null;
+  }
+
   isScanning.value = false;
+  scanEngine.value = "";
 };
 
 const toggleScan = async () => {
@@ -275,7 +385,7 @@ onUnmounted(() => stopScan());
 const submitResiAuto = async (scanned: string) => {
   if (!scanned.trim() || isProcessing.value) return;
 
-  isProcessing.value = true; // ← Lock dulu biar tidak double hit
+  isProcessing.value = true;
   lastResult.value = null;
 
   try {
@@ -290,20 +400,19 @@ const submitResiAuto = async (scanned: string) => {
       resi: scanned,
     };
 
-    playBeep("success"); // ✅ beep beep
+    playBeep("success");
     await showToast("✅ " + (response.data.message || "Berhasil"), "success");
   } catch (err: any) {
-    playBeep("error"); // ❌ beeep panjang
+    playBeep("error");
     const msg = err.response?.data?.message || "Gagal scan resi";
     lastResult.value = {
       success: false,
       message: msg,
       resi: scanned,
     };
-
     await showToast("❌ " + msg, "danger");
   } finally {
-    // ← Unlock setelah 2 detik, biar tidak langsung scan ulang barcode yang sama
+    // Unlock setelah 2 detik, biar tidak re-scan barcode yang sama terus
     setTimeout(() => {
       isProcessing.value = false;
     }, 2000);
@@ -332,11 +441,11 @@ const submitResi = async () => {
       resi: resiNo.value,
     };
 
-    playBeep("success"); // ✅
+    playBeep("success");
     await showToast("✅ " + (response.data.message || "Berhasil"), "success");
-    resiNo.value = ""; // ← Clear input setelah berhasil
+    resiNo.value = "";
   } catch (err: any) {
-    playBeep("error"); // ❌
+    playBeep("error");
     const msg = err.response?.data?.message || "Gagal scan resi";
 
     lastResult.value = {
@@ -395,6 +504,18 @@ const submitResi = async () => {
   font-weight: 500;
 }
 
+/* ─── Engine Badge ── */
+.engine-badge {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 700;
+  color: #16a34a;
+  background: #dcfce7;
+  border: 1px solid #bbf7d0;
+  padding: 2px 8px;
+  border-radius: 20px;
+}
+
 /* ─── Content ── */
 ion-content {
   --background: #f0f4f8;
@@ -433,7 +554,7 @@ ion-content {
   color: #334155;
 }
 
-/* ─── Camera ── */
+/* ─── Camera Box ── */
 .camera-box {
   position: relative;
   width: 100%;
@@ -446,13 +567,16 @@ ion-content {
   height: 100%;
   object-fit: cover;
 }
-
-/* Sembunyikan video saat tidak scanning (fix icon play Android) */
 .video-hidden {
   display: none !important;
 }
 
-/* ─── Camera Placeholder (Modern) ──────────────── */
+/* Canvas tersembunyi untuk ZXing capture */
+.canvas-hidden {
+  display: none !important;
+}
+
+/* ─── Camera Placeholder ── */
 .camera-placeholder {
   position: absolute;
   inset: 0;
@@ -464,7 +588,6 @@ ion-content {
   background: linear-gradient(160deg, #0f172a 0%, #1e293b 60%, #1e3a8a22 100%);
   overflow: hidden;
 }
-
 .camera-placeholder::before {
   content: "";
   position: absolute;
@@ -512,13 +635,11 @@ ion-content {
   z-index: 1;
   margin-bottom: 14px;
 }
-
 .placeholder-icon {
   font-size: 34px;
   color: #ffffff;
   filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.3));
 }
-
 .cam-placeholder-text {
   font-size: 13px;
   font-weight: 600;
@@ -526,7 +647,6 @@ ion-content {
   margin: 0 0 10px;
   z-index: 1;
 }
-
 .cam-hint-badge {
   font-size: 11px;
   font-weight: 500;
@@ -538,17 +658,8 @@ ion-content {
   z-index: 1;
   letter-spacing: 0.2px;
 }
-.placeholder-icon {
-  font-size: 48px;
-  color: #334155;
-}
-.camera-placeholder p {
-  font-size: 13px;
-  color: #64748b;
-  margin: 0;
-}
 
-/* Scan overlay */
+/* ─── Scan Overlay ── */
 .scan-overlay {
   position: absolute;
   inset: 0;
@@ -621,6 +732,7 @@ ion-content {
   color: #1e293b;
   outline: none;
   font-family: inherit;
+  box-sizing: border-box;
 }
 .resi-input:focus {
   border-color: #2563eb;
