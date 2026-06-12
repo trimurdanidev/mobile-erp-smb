@@ -168,6 +168,7 @@ import { ref, onUnmounted } from "vue";
 import api from "@/services/api";
 import { showToast } from "@/services/toastHandlers";
 import { playBeep } from "@/services/audioService";
+import { Html5Qrcode } from "html5-qrcode";
 
 // ── State ──────────────────────────────────────────
 const resiNo = ref("");
@@ -183,6 +184,7 @@ const scannedBy = userData.user || "unknown";
 // ── Scanner ────────────────────────────────────────
 let stream: MediaStream | null = null;
 let scanInterval: any = null;
+let html5QrcodeScanner: Html5Qrcode | null = null;
 
 const startScan = async () => {
   try {
@@ -198,7 +200,7 @@ const startScan = async () => {
     try {
       stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          facingMode: { exact: "environment" }, // ← kamera belakang paksa
+          facingMode: { exact: "environment" },
           width: { ideal: 1280 },
           height: { ideal: 720 },
         },
@@ -213,10 +215,11 @@ const startScan = async () => {
 
     if (videoRef.value) {
       videoRef.value.srcObject = stream;
-      await videoRef.value.play(); // ← paksa play di Android
+      await videoRef.value.play();
     }
     isScanning.value = true;
 
+    // ── KONDISI 1: JIKA DEVICE MENDUKUNG BARCODEDETECTOR NATIVE (Android / Chrome Desktop) ──
     if ("BarcodeDetector" in window) {
       const detector = new (window as any).BarcodeDetector({
         formats: [
@@ -239,10 +242,41 @@ const startScan = async () => {
           }
         } catch (_) {}
       }, 500);
+
+      // ── KONDISI 2: FALLBACK UNTUK IPHONE / SAFARI (Menggunakan html5-qrcode) ──
     } else {
-      await showToast(
-        "BarcodeDetector tidak didukung. Gunakan Chrome terbaru.",
-        "warning"
+      console.warn(
+        "BarcodeDetector tidak didukung, menggunakan fallback html5-qrcode untuk iPhone."
+      );
+
+      // Pastikan Anda punya ID element pembungkus video, atau pasang langsung ke video element jika disupport.
+      // Di sini kita asumsikan videoRef Anda memiliki id atau kita buat instance scan dari stream yang ada.
+      // Pendekatan terbaik html5-qrcode untuk local stream:
+
+      const elementId = "video-container-id"; // ← Ganti dengan ID tag pembungkus <video> Anda atau elemen kosong khusus scan
+
+      html5QrcodeScanner = new Html5Qrcode(elementId);
+
+      // Menggunakan konfigurasi FPS dan QR Box
+      const config = {
+        fps: 10,
+        qrbox: (width: number, height: number) => {
+          return { width: width * 0.7, height: height * 0.7 }; // area scan kotak di tengah
+        },
+      };
+
+      // Jalankan scanner khusus menggunakan camera facingMode 'environment'
+      await html5QrcodeScanner.start(
+        { facingMode: "environment" },
+        config,
+        async (decodedText) => {
+          // Callback ketika barcode berhasil terdeteksi
+          if (isProcessing.value) return;
+          await submitResiAuto(decodedText);
+        },
+        () => {
+          // Callback saat gagal mendeteksi di frame tersebut (bisa diabaikan agar tidak spam log)
+        }
       );
     }
   } catch (err: any) {
@@ -251,8 +285,21 @@ const startScan = async () => {
   }
 };
 
-const stopScan = () => {
+const stopScan = async () => {
   if (scanInterval) clearInterval(scanInterval);
+
+  // ── MODIFIKASI: Matikan scanner html5-qrcode jika sedang aktif (untuk iPhone) ──
+  if (html5QrcodeScanner) {
+    try {
+      if (html5QrcodeScanner.isScanning) {
+        await html5QrcodeScanner.stop();
+      }
+    } catch (err) {
+      console.error("Gagal menghentikan html5QrcodeScanner:", err);
+    }
+    html5QrcodeScanner = null; // Reset ke null setelah di-stop
+  }
+
   if (stream) {
     stream.getTracks().forEach((t) => t.stop());
     stream = null;
