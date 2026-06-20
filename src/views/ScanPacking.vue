@@ -231,6 +231,10 @@ const toggleScan = async () => {
   else await startScan();
 };
 
+const submitResiAuto = (resiNo: string) => {
+  console.log("Nomor resi otomatis masuk:", resiNo);
+};
+
 const startScan = async () => {
   try {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
