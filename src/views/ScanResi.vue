@@ -427,21 +427,39 @@ const startScan = async () => {
 };
 
 const stopScan = async () => {
-  if (scanInterval) clearInterval(scanInterval);
+  if (scanInterval) {
+    clearInterval(scanInterval);
+    scanInterval = null; // ✅
+  }
+
   if (html5QrcodeScanner) {
     try {
-      if (html5QrcodeScanner.isScanning) await html5QrcodeScanner.stop();
+      if (html5QrcodeScanner.isScanning) {
+        await html5QrcodeScanner.stop();
+        await html5QrcodeScanner.clear(); // ✅
+      }
     } catch (err) {
       console.error("Gagal menghentikan html5QrcodeScanner:", err);
     }
     html5QrcodeScanner = null;
   }
+
   if (stream) {
-    stream.getTracks().forEach((t) => t.stop());
+    stream.getTracks().forEach((track) => {
+      track.stop();
+      track.enabled = false; // ✅
+    });
     stream = null;
   }
-  if (videoRef.value) videoRef.value.srcObject = null;
+
+  if (videoRef.value) {
+    videoRef.value.pause();
+    videoRef.value.srcObject = null;
+    videoRef.value.load(); // ✅
+  }
+
   isScanning.value = false;
+  isProcessing.value = false; // ✅ reset flag
 };
 
 const toggleScan = async () => {
@@ -454,7 +472,15 @@ onMounted(() => {
   fetchMarketplaceList();
 });
 
-onUnmounted(() => stopScan());
+onUnmounted(async () => {
+  await stopScan();
+});
+
+const isMounted = ref(true);
+onUnmounted(async () => {
+  isMounted.value = false; // ✅ set false dulu
+  await stopScan();
+});
 
 // ── Handle Response API ────────────────────────────
 const handleScanResponse = (response: any, resi: string) => {
@@ -495,7 +521,7 @@ const handleScanResponse = (response: any, resi: string) => {
 
 // ── Submit Auto dari Scanner ───────────────────────
 const submitResiAuto = async (scanned: string) => {
-  if (!scanned.trim() || isProcessing.value) return;
+ if (!scanned.trim() || isProcessing.value || !isMounted.value) return; // ✅ cek isMounted
   isProcessing.value = true;
   lastResult.value = null;
 

@@ -231,10 +231,6 @@ const toggleScan = async () => {
   else await startScan();
 };
 
-const submitResiAuto = (resiNo: string) => {
-  console.log("Nomor resi otomatis masuk:", resiNo);
-};
-
 const startScan = async () => {
   try {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -287,7 +283,7 @@ const startScan = async () => {
         try {
           const barcodes = await detector.detect(videoRef.value);
           if (barcodes.length > 0) {
-            await submitResiAuto(barcodes[0].rawValue);
+            await submitPackingAuto(barcodes[0].rawValue);
           }
         } catch (_) {}
       }, 500);
@@ -321,7 +317,7 @@ const startScan = async () => {
         async (decodedText) => {
           // Callback ketika barcode berhasil terdeteksi
           if (isProcessing.value) return;
-          await submitResiAuto(decodedText);
+          await submitPackingAuto(decodedText);
         },
         () => {
           // Callback saat gagal mendeteksi di frame tersebut (bisa diabaikan agar tidak spam log)
@@ -335,29 +331,43 @@ const startScan = async () => {
 };
 
 const stopScan = async () => {
-  if (scanInterval) clearInterval(scanInterval);
+  if (scanInterval) {
+    clearInterval(scanInterval);
+    scanInterval = null; // ✅ null, bukan cuma clear
+  }
 
-  // ── MODIFIKASI: Matikan scanner html5-qrcode jika sedang aktif (untuk iPhone) ──
   if (html5QrcodeScanner) {
     try {
       if (html5QrcodeScanner.isScanning) {
         await html5QrcodeScanner.stop();
+        await html5QrcodeScanner.clear(); // ✅ release DOM
       }
     } catch (err) {
       console.error("Gagal menghentikan html5QrcodeScanner:", err);
     }
-    html5QrcodeScanner = null; // Reset ke null setelah di-stop
+    html5QrcodeScanner = null;
   }
 
   if (stream) {
-    stream.getTracks().forEach((t) => t.stop());
+    stream.getTracks().forEach((track) => {
+      track.stop();
+      track.enabled = false; // ✅ force disable
+    });
     stream = null;
   }
-  if (videoRef.value) videoRef.value.srcObject = null;
+
+  if (videoRef.value) {
+    videoRef.value.pause();
+    videoRef.value.srcObject = null;
+    videoRef.value.load(); // ✅ reset video element
+  }
+
   isScanning.value = false;
 };
 
-onUnmounted(() => stopScan());
+onUnmounted(async () => {
+  await stopScan();
+});
 
 // ── Submit Auto dari Scanner ───────────────────────
 const submitPackingAuto = async (scanned: string) => {
