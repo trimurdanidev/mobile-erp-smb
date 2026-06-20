@@ -1224,7 +1224,6 @@ onMounted(() => {
   border-radius: 8px;
   padding: 2px;
 }
-
 .col-status {
   display: flex;
   justify-content: center;

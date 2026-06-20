@@ -25,6 +25,10 @@
               class="scan-section-icon"
             ></ion-icon>
             <span class="scan-section-title">Barcode Resi</span>
+            <!-- Badge info engine yang aktif -->
+            <span class="engine-badge" v-if="isScanning">
+              {{ scanEngine }}
+            </span>
           </div>
 
           <div class="camera-box" :class="{ 'camera-active': isScanning }">
@@ -36,6 +40,9 @@
               playsinline
               muted
             ></video>
+
+            <!-- Canvas tersembunyi — dipakai ZXing untuk capture frame -->
+            <canvas ref="canvasRef" class="canvas-hidden"></canvas>
 
             <!-- Scan overlay -->
             <div class="scan-overlay" v-if="isScanning">
@@ -286,13 +293,13 @@ import { ref, onMounted, onUnmounted } from "vue";
 import api from "@/services/api";
 import { showToast } from "@/services/toastHandlers";
 import { playBeep } from "@/services/audioService";
-import { Html5Qrcode } from "html5-qrcode";
 
 // ── State ──────────────────────────────────────────
 const resiNo = ref("");
 const loading = ref(false);
 const isScanning = ref(false);
 const videoRef = ref<HTMLVideoElement | null>(null);
+const canvasRef = ref<HTMLCanvasElement | null>(null);
 const lastResult = ref<any>(null);
 const isProcessing = ref(false);
 
@@ -342,17 +349,22 @@ const handleLogoError = (event: Event) => {
 // ── Scanner ────────────────────────────────────────
 let stream: MediaStream | null = null;
 let scanInterval: any = null;
-let html5QrcodeScanner: Html5Qrcode | null = null;
+let zxingReader: any = null; // instance ZXingBrowser.BrowserMultiFormatReader
 
-const startScan = async () => {
-  try {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      await showToast(
-        "Kamera tidak tersedia. Pastikan akses via HTTPS.",
-        "danger"
-      );
-      return;
-    }
+// ── Deteksi support BarcodeDetector (Chrome / Android) ─
+const isBarcodeDetectorSupported = (): boolean => {
+  return typeof (window as any).BarcodeDetector !== "undefined";
+};
+
+// ── Buka stream kamera (cross-browser) ────────────
+const openCamera = async (): Promise<boolean> => {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    await showToast(
+      "Kamera tidak tersedia. Pastikan akses via HTTPS.",
+      "danger"
+    );
+    return false;
+  }
 
     try {
       stream = await navigator.mediaDevices.getUserMedia({
@@ -368,9 +380,20 @@ const startScan = async () => {
         video: { facingMode: "environment" },
       });
     }
+  }
 
-    if (videoRef.value) {
-      videoRef.value.srcObject = stream;
+  if (!stream) {
+    await showToast(
+      "Gagal akses kamera. Pastikan izin kamera sudah diberikan.",
+      "danger"
+    );
+    return false;
+  }
+
+  if (videoRef.value) {
+    videoRef.value.srcObject = stream;
+    // iOS Safari kadang perlu dipaksa play setelah srcObject di-set
+    try {
       await videoRef.value.play();
     }
     isScanning.value = true;
@@ -444,6 +467,7 @@ const stopScan = async () => {
     html5QrcodeScanner = null;
   }
 
+  // Matikan stream kamera
   if (stream) {
     stream.getTracks().forEach((track) => {
       track.stop();
@@ -689,6 +713,18 @@ const cancelShopModal = () => {
   font-weight: 500;
 }
 
+/* ─── Engine Badge ── */
+.engine-badge {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 700;
+  color: #16a34a;
+  background: #dcfce7;
+  border: 1px solid #bbf7d0;
+  padding: 2px 8px;
+  border-radius: 20px;
+}
+
 /* ─── Content ── */
 ion-content {
   --background: #f0f4f8;
@@ -727,7 +763,7 @@ ion-content {
   color: #334155;
 }
 
-/* ─── Camera ── */
+/* ─── Camera Box ── */
 .camera-box {
   position: relative;
   width: 100%;
@@ -827,7 +863,7 @@ ion-content {
   letter-spacing: 0.2px;
 }
 
-/* Scan overlay */
+/* ─── Scan Overlay ── */
 .scan-overlay {
   position: absolute;
   inset: 0;

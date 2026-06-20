@@ -17,38 +17,41 @@
     </ion-header>
 
     <ion-content :fullscreen="false">
-      <!-- <ion-refresher slot="fixed" @ionRefresh="handleRefresh">
-        <ion-refresher-content
-          pulling-icon="chevron-down-circle-outline"
-          refreshing-spinner="crescent"
-        ></ion-refresher-content>
-      </ion-refresher> -->
-
       <div class="absen-wrapper">
+        <!-- ─── Camera Card ─── -->
         <div class="camera-card">
           <div class="camera-label">
             <ion-icon :icon="videocamOutline" class="cam-icon"></ion-icon>
             <span>Kamera Selfie</span>
           </div>
+
           <div class="video-wrap">
+            <!-- Preview setelah foto diambil -->
             <img
-              v-if="selfieTaken && !isCameraOpen"
+              v-if="selfieTaken"
               :src="selfieImage"
               class="video-feed"
               alt="Preview Selfie"
             />
 
+            <!-- Live video stream (PWA mode) -->
             <video
-              v-else-if="isCameraOpen"
-              ref="videoSelfieRef"
+              v-if="!selfieTaken && isPwaMode && isCameraOpen"
+              ref="videoRef"
+              class="video-feed"
               autoplay
               playsinline
               muted
-              class="video-feed"
-              style="transform: scaleX(-1); object-fit: cover"
             ></video>
 
-            <div v-else class="camera-placeholder">
+            <!-- Canvas tersembunyi untuk capture di PWA mode -->
+            <canvas ref="canvasRef" class="canvas-hidden"></canvas>
+
+            <!-- Placeholder awal -->
+            <div
+              v-if="!selfieTaken && !isCameraOpen"
+              class="camera-placeholder"
+            >
               <div class="cam-pulse-ring"></div>
               <div class="cam-circle">
                 <ion-icon
@@ -60,29 +63,35 @@
               <span class="cam-hint-badge">Tap "Buka Kamera" untuk mulai</span>
             </div>
 
-            <div v-if="selfieTaken && !isCameraOpen" class="selfie-taken-badge">
+            <!-- Badge sukses -->
+            <div v-if="selfieTaken" class="selfie-taken-badge">
               <ion-icon :icon="checkmarkCircleOutline"></ion-icon>
               Selfie diambil
             </div>
           </div>
 
+          <!-- Tombol kamera — berubah konteks sesuai state -->
           <button
-            v-if="isCameraOpen"
             class="selfie-btn"
-            @click="captureSelfieWeb"
+            @click="handleCameraBtn"
+            :disabled="cameraLoading"
           >
-            <ion-icon
-              :icon="checkmarkCircleOutline"
-              class="selfie-btn-icon"
-            ></ion-icon>
-            Jepret Foto
-          </button>
-
-          <button v-else class="selfie-btn" @click="takeSelfieNative">
-            <ion-icon :icon="cameraOutline" class="selfie-btn-icon"></ion-icon>
-            {{ selfieTaken ? "Ambil Ulang Selfie" : "Buka Kamera" }}
+            <ion-spinner
+              v-if="cameraLoading"
+              name="crescent"
+              class="selfie-spinner"
+            ></ion-spinner>
+            <template v-else>
+              <ion-icon
+                :icon="cameraOutline"
+                class="selfie-btn-icon"
+              ></ion-icon>
+              {{ cameraBtnLabel }}
+            </template>
           </button>
         </div>
+
+        <!-- ─── Lokasi ─── -->
         <div class="info-card">
           <div class="info-card-header">
             <ion-icon
@@ -93,6 +102,15 @@
             <div v-if="loadingLoc" class="loading-dot-wrap">
               <ion-spinner name="dots" class="loc-spinner"></ion-spinner>
             </div>
+            <!-- Tombol retry lokasi -->
+            <button
+              v-if="!loadingLoc && !dataPosition"
+              class="retry-loc-btn"
+              @click="fetchData"
+            >
+              <ion-icon :icon="refreshOutline"></ion-icon>
+              Coba Lagi
+            </button>
           </div>
           <p class="loc-text" v-if="!loadingLoc && dataPosition">
             {{ dataPosition }}
@@ -101,10 +119,11 @@
             class="loc-text loc-placeholder"
             v-else-if="!loadingLoc && !dataPosition"
           >
-            Belum bisa mengambil lokasi. Coba refresh.
+            Belum bisa mengambil lokasi. Pastikan GPS aktif.
           </p>
         </div>
 
+        <!-- ─── Keterangan ─── -->
         <div class="info-card">
           <div class="info-card-header">
             <ion-icon
@@ -123,6 +142,7 @@
           </div>
         </div>
 
+        <!-- ─── Submit ─── -->
         <button
           class="hadir-btn"
           :class="{ 'hadir-btn-disabled': !selfieTaken || loading }"
@@ -148,7 +168,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 import api from "@/services/api";
 import { showToast } from "@/services/toastHandlers";
 import {
@@ -160,8 +180,6 @@ import {
   IonButtons,
   IonIcon,
   IonSpinner,
-  IonRefresher,
-  IonRefresherContent,
   alertController,
 } from "@ionic/vue";
 import {
@@ -172,29 +190,48 @@ import {
   createOutline,
   checkmarkDoneOutline,
   checkmarkCircleOutline,
+  refreshOutline,
 } from "ionicons/icons";
 import router from "@/router";
-import { Http } from "@capacitor-community/http";
-import { Geolocation } from "@capacitor/geolocation";
+import { Capacitor } from "@capacitor/core";
+import { Html5Qrcode } from "html5-qrcode";
 
-// ── Import Capacitor Camera ──
-import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
+// ── Deteksi environment ────────────────────────────
+// isPwaMode = true  → jalan di browser (iPhone Safari PWA / desktop)
+// isPwaMode = false → jalan di native Capacitor (iOS/Android app)
+const isPwaMode = !Capacitor.isNativePlatform();
 
-// ── State ─────────────────────────────────────────
+// ── State ──────────────────────────────────────────
 const hariIni = ref("");
 const tanggalHariIni = ref("");
 const latitude = ref(null);
 const longitude = ref(null);
-const selfieTaken = ref(false); // Diubah ke boolean default false
-const selfieImage = ref(null); // Menyimpan format lengkap base64 murni untuk src img
-const rawBase64 = ref(null); // Menyimpan string base64 murni tanpa header data:image
+const selfieTaken = ref(false);
+const selfieImage = ref(null);
+const rawBase64 = ref(null);
 const loading = ref(false);
 const loadingLoc = ref(false);
-const getUser = localStorage.getItem("master_user");
-const userData = ref([]);
+const cameraLoading = ref(false);
+const isCameraOpen = ref(false);
 const dataPosition = ref(null);
 const fileName = ref(null);
 const keterangan = ref(null);
+const videoRef = ref(null);
+const canvasRef = ref(null);
+
+const getUser = localStorage.getItem("master_user");
+const userData = ref([]);
+const baseLocation_lat = ref("");
+const baseLocation_long = ref("");
+const statusUser_base = ref("");
+const user = ref(null);
+const phone = ref(null);
+const nik = ref(null);
+const description = ref(null);
+const department_name = ref(null);
+
+// Stream kamera (PWA mode)
+let cameraStream = null;
 
 const hariList = [
   "Minggu",
@@ -205,27 +242,20 @@ const hariList = [
   "Jumat",
   "Sabtu",
 ];
-const baseLocation_lat = ref("");
-const baseLocation_long = ref("");
-const statusUser_base = ref("");
-const user = ref(null);
-const parsedUser = ref(null);
-const geterUser = ref(null);
-const phone = ref(null);
-const nik = ref(null);
-const description = ref(null);
-const department_name = ref(null);
-const isCameraOpen = ref(false);
-const videoSelfieRef = (ref < HTMLVideoElement) | (null > null);
-let localStream = ref(null);
 
-// ── Functions ─────────────────────────────────────
+// ── Label tombol kamera (computed) ────────────────
+const cameraBtnLabel = computed(() => {
+  if (selfieTaken.value) return "Ambil Ulang Selfie";
+  if (isCameraOpen.value) return "Ambil Foto";
+  return "Buka Kamera";
+});
+
+// ── Helpers tanggal & waktu ────────────────────────
 const getCurrentDateTime = () => {
   const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  tanggalHariIni.value = `${day}-${month}-${year}`;
+  tanggalHariIni.value = `${String(now.getDate()).padStart(2, "0")}-${String(
+    now.getMonth() + 1
+  ).padStart(2, "0")}-${now.getFullYear()}`;
   hariIni.value = hariList[now.getDay()];
 };
 
@@ -247,6 +277,7 @@ const time = () => {
 const getLocation = async () => {
   try {
     // 💡 DETEKSI PLATFORM: Jika dijalankan di Browser Web / PWA (Bukan Native App Android)
+
     if (!window.Capacitor || !window.Capacitor.isNativePlatform()) {
       console.log("Menggunakan HTML5 Browser Geolocation untuk Web...");
 
@@ -255,23 +286,30 @@ const getLocation = async () => {
       }
 
       // ── PERBAIKAN DI SINI: Sintaks Promise dibuat super clean & standard ──
+
       const position = await new Promise((res, rej) => {
         navigator.geolocation.getCurrentPosition(res, rej, {
           enableHighAccuracy: true,
+
           timeout: 15000,
+
           maximumAge: 0,
         });
       });
 
       latitude.value = position.coords.latitude;
+
       longitude.value = position.coords.longitude;
+
       return; // Selesai, bypass alur native di bawah
     }
 
     // ── JALUR NATIVE ANDROID APP (Kode Asli Kamu Tetap Dipertahankan) ──
+
     console.log("Menggunakan Capacitor Geolocation untuk Native App...");
 
     const permission = await Geolocation.requestPermissions();
+
     if (
       permission.location !== "granted" &&
       permission.coarseLocation !== "granted"
@@ -281,13 +319,31 @@ const getLocation = async () => {
 
     const position = await Geolocation.getCurrentPosition({
       enableHighAccuracy: true,
+
       timeout: 15000,
     });
 
     latitude.value = position.coords.latitude;
+
     longitude.value = position.coords.longitude;
   } catch (error) {
     throw error; // ← Tetap dilempar ke fetchData bawaanmu
+  }
+};
+
+// ── Reverse geocoding — hybrid (Capacitor Http / fetch fallback) ─
+const reverseGeocode = async (lat, lon) => {
+  const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`;
+  const headers = { "User-Agent": "erpsmb/2.3 (trimurdani78.tm@gmail.com)" };
+
+  if (!isPwaMode) {
+    const { Http } = await import("@capacitor-community/http");
+    const response = await Http.get({ url, headers });
+    return response.data.display_name;
+  } else {
+    const response = await fetch(url, { headers });
+    const data = await response.json();
+    return data.display_name;
   }
 };
 
@@ -296,19 +352,10 @@ const fetchData = async () => {
   dataPosition.value = null;
   try {
     await getLocation();
-    const response = await Http.get({
-      url: "https://nominatim.openstreetmap.org/reverse",
-      params: {
-        format: "jsonv2",
-        lat: latitude.value,
-        lon: longitude.value,
-      },
-      headers: { "User-Agent": "erpsmb/2.3 (trimurdani78.tm@gmail.com)" },
-    });
-    dataPosition.value = response.data.display_name;
+    dataPosition.value = await reverseGeocode(latitude.value, longitude.value);
     await showToast("Lokasi berhasil didapatkan", "success");
   } catch (error) {
-    console.error("Error Menampilkan Lokasi:", error);
+    console.error("Error lokasi:", error);
     dataPosition.value = null;
     await showToast("Gagal mendapatkan lokasi. Pastikan GPS aktif.", "danger");
   } finally {
@@ -316,126 +363,192 @@ const fetchData = async () => {
   }
 };
 
-const takeSelfieNative = async () => {
-  // 💡 DETEKSI DEVICE: Jika tidak ada native device platform (berarti dibuka via Browser Web/PWA)
-  if (!window.Capacitor || !window.Capacitor.isNativePlatform()) {
-    await openSelfieCameraWeb();
-    return;
-  }
+// ── Kamera — hybrid ────────────────────────────────
+// Native: pakai Capacitor Camera
+// PWA   : buka stream getUserMedia → ambil foto via canvas
 
-  // ── JALUR A: ANDROID NATIVE APP (Kode Asli Kamu Tetap Dipertahankan) ──
+const openPwaCamera = async () => {
+  cameraLoading.value = true;
   try {
-    const status = await Camera.checkPermissions();
-    if (status.camera !== "granted") {
-      const requestStatus = await Camera.requestPermissions({
-        permissions: ["camera"],
-      });
-      if (requestStatus.camera !== "granted") {
-        await showToast("Akses kamera ditolak oleh pengguna.", "danger");
-        return;
-      }
+    // Coba kamera depan (selfie), fallback ke kamera manapun
+    const constraints = [
+      {
+        video: {
+          facingMode: "user",
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+      },
+      { video: { facingMode: "user" } },
+      { video: true },
+    ];
+
+    for (const c of constraints) {
+      try {
+        cameraStream = await navigator.mediaDevices.getUserMedia(c);
+        break;
+      } catch (_) {}
     }
 
-    const image = await Camera.getPhoto({
-      quality: 85,
-      allowEditing: false,
-      resultType: CameraResultType.Base64,
-      source: CameraSource.Camera,
-      direction: "front",
-    });
-
-    rawBase64.value = image.base64String;
-    selfieImage.value = `data:image/jpeg;base64,${image.base64String}`;
-    selfieTaken.value = true;
-  } catch (error) {
-    console.error("Kamera dibatalkan/error:", error);
-  }
-};
-
-const openSelfieCameraWeb = async () => {
-  try {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    if (!cameraStream) {
       await showToast(
-        "Kamera tidak didukung atau pastikan menggunakan HTTPS.",
+        "Gagal membuka kamera. Berikan izin kamera di browser.",
         "danger"
       );
       return;
     }
 
-    selfieTaken.value = false;
-    isCameraOpen.value = true; // Flag untuk memunculkan tag <video> di HTML
+    isCameraOpen.value = true;
 
-    localStream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: "user", // Paksa kamera depan
-        width: { ideal: 640 },
-        height: { ideal: 480 },
-      },
-      audio: false,
-    });
+    // Tunggu DOM update agar videoRef tersedia
+    await new Promise((r) => setTimeout(r, 100));
 
-    setTimeout(() => {
-      if (videoSelfieRef.value) {
-        videoSelfieRef.value.srcObject = localStream;
-      }
-    }, 100);
-  } catch (err) {
-    isCameraOpen.value = false;
-    console.error("Gagal membuka kamera web:", err);
-    await showToast("Gagal akses kamera: " + (err.message || err), "danger");
+    if (videoRef.value) {
+      videoRef.value.srcObject = cameraStream;
+      try {
+        await videoRef.value.play();
+      } catch (_) {}
+    }
+  } finally {
+    cameraLoading.value = false;
   }
 };
 
-const captureSelfieWeb = () => {
-  if (!videoSelfieRef.value || !localStream) return;
+const capturePwaPhoto = () => {
+  if (!videoRef.value || !canvasRef.value) return;
 
-  const video = videoSelfieRef.value;
-  const canvas = document.createElement("canvas");
-
+  const video = videoRef.value;
+  const canvas = canvasRef.value;
   canvas.width = video.videoWidth || 640;
   canvas.height = video.videoHeight || 480;
 
   const ctx = canvas.getContext("2d");
-  if (ctx) {
-    // Efek mirror pas simpan foto agar tidak kebalik kiri-kanan
-    ctx.translate(canvas.width, 0);
-    ctx.scale(-1, 1);
 
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  // Mirror horizontal (selfie lazimnya di-mirror)
+  ctx.translate(canvas.width, 0);
+  ctx.scale(-1, 1);
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+  // Ambil hasil sebagai base64
+  const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+  rawBase64.value = dataUrl.split(",")[1];
+  selfieImage.value = dataUrl;
+  selfieTaken.value = true;
 
-    // SESUAIKAN DENGAN SKEMA VARIABEL LAMA KAMU
-    selfieImage.value = dataUrl;
-    rawBase64.value = dataUrl.replace(/^data:image\/[a-z]+;base64,/, "");
-    selfieTaken.value = true;
-
-    // Matikan kamera setelah dijepret
-    closeSelfieCameraWeb();
-  }
-};
-
-const closeSelfieCameraWeb = () => {
-  if (localStream) {
-    localStream.getTracks().forEach((track) => track.stop());
-    localStream = null;
-  }
-  if (videoSelfieRef.value) {
-    videoSelfieRef.value.srcObject = null;
-  }
+  // Matikan stream setelah foto diambil
+  stopPwaCamera();
   isCameraOpen.value = false;
 };
 
-// Fungsi helper konversi Base64 murni ke Blob berkas biner
+const stopPwaCamera = () => {
+  if (cameraStream) {
+    cameraStream.getTracks().forEach((t) => t.stop());
+    cameraStream = null;
+  }
+  if (videoRef.value) videoRef.value.srcObject = null;
+};
+
+const takeSelfieNative = async () => {
+  const { Camera, CameraResultType, CameraSource } = await import(
+    "@capacitor/camera"
+  );
+  const status = await Camera.checkPermissions();
+  if (status.camera !== "granted") {
+    const req = await Camera.requestPermissions({ permissions: ["camera"] });
+    if (req.camera !== "granted") {
+      await showToast("Akses kamera ditolak oleh pengguna.", "danger");
+      return;
+    }
+  }
+  const image = await Camera.getPhoto({
+    quality: 85,
+    allowEditing: false,
+    resultType: CameraResultType.Base64,
+    source: CameraSource.Camera,
+    direction: "front",
+  });
+  rawBase64.value = image.base64String;
+  selfieImage.value = `data:image/jpeg;base64,${image.base64String}`;
+  selfieTaken.value = true;
+};
+
+// ── Handler tombol kamera (satu tombol, tiga state) ─
+const handleCameraBtn = async () => {
+  if (isPwaMode) {
+    if (selfieTaken.value || !isCameraOpen.value) {
+      // Reset dulu kalau mau ambil ulang
+      selfieTaken.value = false;
+      selfieImage.value = null;
+      rawBase64.value = null;
+      await openPwaCamera();
+    } else if (isCameraOpen.value) {
+      // Kamera sudah terbuka — ambil foto sekarang
+      capturePwaPhoto();
+    }
+  } else {
+    // Native Capacitor
+    await takeSelfieNative();
+  }
+};
+
+// ── Helper ────────────────────────────────────────
 const base64ToBlob = (base64, mimeType) => {
   const byteCharacters = atob(base64);
-  const byteNumbers = new Array(byteCharacters.length);
+  const byteArray = new Uint8Array(byteCharacters.length);
   for (let i = 0; i < byteCharacters.length; i++) {
-    byteNumbers[i] = byteCharacters.charCodeAt(i);
+    byteArray[i] = byteCharacters.charCodeAt(i);
   }
-  const byteArray = new Uint8Array(byteNumbers);
   return new Blob([byteArray], { type: mimeType });
 };
+
+const compressBase64 = (
+  base64Str,
+  maxWidth = 1024,
+  maxHeight = 1024,
+  quality = 0.7
+) => {
+  return new Promise((resolve, reject) => {
+    if (!base64Str) return reject(new Error("Base64 kosong"));
+    const cleaned = base64Str.trim().replace(/[\r\n]/g, "");
+    const img = new Image();
+    img.src = cleaned.startsWith("data:image")
+      ? cleaned
+      : `data:image/jpeg;base64,${cleaned}`;
+    img.onload = () => {
+      let w = img.width,
+        h = img.height;
+      if (w > h) {
+        if (w > maxWidth) {
+          h = Math.round((h * maxWidth) / w);
+          w = maxWidth;
+        }
+      } else {
+        if (h > maxHeight) {
+          w = Math.round((w * maxHeight) / h);
+          h = maxHeight;
+        }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL("image/jpeg", quality));
+    };
+    img.onerror = reject;
+  });
+};
+
+function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371e3,
+    toRad = (d) => (d * Math.PI) / 180;
+  const φ1 = toRad(lat1),
+    φ2 = toRad(lat2);
+  const Δφ = toRad(lat2 - lat1),
+    Δλ = toRad(lon2 - lon1);
+  const a =
+    Math.sin(Δφ / 2) ** 2 + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 const showSuccessAlert = async () => {
   const alert = await alertController.create({
@@ -448,166 +561,72 @@ const showSuccessAlert = async () => {
   await alert.present();
 };
 
-function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
-  const R = 6371e3;
-  const toRad = (deg) => (deg * Math.PI) / 180;
-  const φ1 = toRad(lat1),
-    φ2 = toRad(lat2);
-  const Δφ = toRad(lat2 - lat1),
-    Δλ = toRad(lon2 - lon1);
-  const a =
-    Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-const compressBase64 = (
-  base64Str,
-  maxWidth = 1024,
-  maxHeight = 1024,
-  quality = 0.7
-) => {
-  return new Promise((resolve, reject) => {
-    if (!base64Str) {
-      return reject(new Error("String Base64 kosong"));
-    }
-
-    // 💡 LANGKAH PENGAMANAN: Bersihkan spasi, enter, atau karakter aneh di ujung string
-    let cleanedBase64 = base64Str.trim().replace(/[\r\n]/g, "");
-
-    const img = new Image();
-
-    // Cek apakah sudah ada prefix data URL-nya
-    if (cleanedBase64.startsWith("data:image")) {
-      img.src = cleanedBase64;
-    } else {
-      img.src = `data:image/jpeg;base64,${cleanedBase64}`;
-    }
-
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      let width = img.width;
-      let height = img.height;
-
-      // Logika mempertahankan aspek rasio gambar
-      if (width > height) {
-        if (width > maxWidth) {
-          height = Math.round((height * maxWidth) / width);
-          width = maxWidth;
-        }
-      } else {
-        if (height > maxHeight) {
-          width = Math.round((width * maxHeight) / height);
-          height = maxHeight;
-        }
-      }
-
-      canvas.width = width;
-      canvas.height = height;
-
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0, width, height);
-
-      // Ambil hasil kompresi dengan format JPEG
-      const compressedBase64 = canvas.toDataURL("image/jpeg", quality);
-      resolve(compressedBase64);
-    };
-
-    img.onerror = (err) => {
-      console.error("Error saat memuat gambar ke objek Image:", err);
-      reject(err);
-    };
-  });
-};
-
+// ── Submit absen ───────────────────────────────────
 const submitAbsen = async () => {
   loading.value = true;
   try {
     userData.value = JSON.parse(getUser);
     const token = localStorage.getItem("access_token");
-    const baseLat = parseFloat(baseLocation_lat.value);
-    const baseLong = parseFloat(baseLocation_long.value);
-    const userLat = parseFloat(latitude.value);
-    const userLong = parseFloat(longitude.value);
 
-    const distance = getDistanceFromLatLonInMeters(
-      userLat,
-      userLong,
-      baseLat,
-      baseLong
-    );
-    const maxRadius = 50;
-
-    if (distance > maxRadius && statusUser_base.value == 0) {
-      await showToast(
-        `Lokasi Terlalu Jauh!\n Jarak anda ${Math.round(
-          distance
-        )}M Dari Tempat Kerja.`,
-        "danger"
+    // Cek radius (hanya jika statusUser_base === 0 = wajib di kantor)
+    if (statusUser_base.value == 0) {
+      const distance = getDistanceFromLatLonInMeters(
+        parseFloat(latitude.value),
+        parseFloat(longitude.value),
+        parseFloat(baseLocation_lat.value),
+        parseFloat(baseLocation_long.value)
       );
-      loading.value = false;
+      if (distance > 50) {
+        await showToast(
+          `Lokasi Terlalu Jauh! Jarak anda ${Math.round(
+            distance
+          )}M dari tempat kerja.`,
+          "danger"
+        );
+        return;
+      }
+    }
+
+    // Kompresi gambar
+    let finalBase64 = rawBase64.value;
+    try {
+      const cleaned = rawBase64.value.trim().replace(/[\r\n]/g, "");
+      const compressed = await compressBase64(cleaned, 1024, 1024, 0.7);
+      finalBase64 = compressed.includes(",")
+        ? compressed.split(",")[1]
+        : compressed;
+    } catch (compressErr) {
+      console.warn("Kompresi gagal, pakai gambar asli:", compressErr);
+    }
+
+    const blob = base64ToBlob(finalBase64, "image/jpeg");
+    if (!blob || blob.size === 0) {
+      await showToast("File gambar tidak valid!", "danger");
       return;
     }
 
-    const absenData = new FormData();
     const timestamp = new Date().getTime();
     fileName.value = `IN_${userData.value.user}_${timestamp}.jpeg`;
 
+    const absenData = new FormData();
     absenData.append("user_id", userData.value.user);
     absenData.append("date", dateNow());
     absenData.append("time_in", time());
     absenData.append("latitude_in", latitude.value);
     absenData.append("longitude_in", longitude.value);
-    absenData.append(
-      "absensi_ref",
-      keterangan.value ? keterangan.value.value : ""
-    );
+    absenData.append("absensi_ref", keterangan.value?.value ?? "");
     absenData.append("address_in", dataPosition.value);
-
-    let blob = base64ToBlob(rawBase64.value, "image/jpeg");
-    if (!blob || blob.size === 0) {
-      await showToast("File gambar tidak valid!", "danger");
-      loading.value = false;
-      return;
-    }
-
-    try {
-      const cleanedBase64 = rawBase64.value.trim().replace(/[\r\n]/g, "");
-      const compressedBase64 = await compressBase64(
-        cleanedBase64,
-        1024,
-        1024,
-        0.7
-      );
-
-      let pureBase64 = compressedBase64;
-      if (compressedBase64.includes(",")) {
-        pureBase64 = compressedBase64.split(",")[1]; // Ambil data setelah tanda koma (string murninya)
-      }
-
-      blob = base64ToBlob(pureBase64, "image/jpeg");
-      // console.log("🔥 Kompresi sukses! Ukuran blob baru:", blob.size);
-    } catch (compressErr) {
-      console.error(
-        "Gagal kompres gambar, sistem otomatis menggunakan file asli:",
-        compressErr
-      );
-    }
-
     absenData.append("images_in", blob, fileName.value);
 
     const apiBase = import.meta.env.VITE_BASE_URL;
     const res = await fetch(`${apiBase}/addAbsen`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      headers: { Authorization: `Bearer ${token}` },
       body: absenData,
     });
 
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}));
-      console.error("Server error:", JSON.stringify(errData));
       const errMsg = errData?.errors
         ? Object.entries(errData.errors)
             .map(([f, m]) => `${f}: ${m}`)
@@ -620,55 +639,37 @@ const submitAbsen = async () => {
     await showSuccessAlert();
     router.replace("/");
   } catch (error) {
-    console.error("Gagal absen:", error.response?.data || error.message);
-    await showToast(
-      error.response?.data?.message || "Terjadi kesalahan server",
-      "danger"
-    );
+    console.error("Gagal absen:", error);
+    await showToast(error?.message || "Terjadi kesalahan server", "danger");
   } finally {
     loading.value = false;
   }
 };
 
-const handleRefresh = async (event) => {
-  try {
-    await fetchData();
-  } finally {
-    event.target.complete();
-  }
-};
-
+// ── User data prep ─────────────────────────────────
 const fetchUserPrepAbsen = async () => {
   try {
     const token = localStorage.getItem("access_token");
-
     if (!token) {
       router.replace("/login");
       return;
     }
 
     userData.value = JSON.parse(getUser);
-
-    const response = api.get("showByUser/" + userData.value.user, {
+    const response = await api.get("showByUser/" + userData.value.user, {
       headers: { Authorization: `Bearer ${token}` },
     });
-
-    user.value = (await response).data;
-    parsedUser.value = JSON.stringify(user.value);
-    geterUser.value = JSON.parse(parsedUser.value);
-    phone.value = geterUser.value.data.phone;
-    nik.value = geterUser.value.data.nik;
-    description.value = geterUser.value.data.description;
-    department_name.value = geterUser.value.data.department_name;
-    user.value = geterUser.value.data.user;
-    baseLocation_lat.value = geterUser.value.data.base_location_lat;
-    baseLocation_long.value = geterUser.value.data.base_location_long;
-    statusUser_base.value = geterUser.value.data.is_mobile;
+    const d = response.data.data;
+    phone.value = d.phone;
+    nik.value = d.nik;
+    description.value = d.description;
+    department_name.value = d.department_name;
+    user.value = d.user;
+    baseLocation_lat.value = d.base_location_lat;
+    baseLocation_long.value = d.base_location_long;
+    statusUser_base.value = d.is_mobile;
   } catch (error) {
-    console.error(
-      "❌ Gagal mengambil data pengguna:",
-      error.response?.data || error
-    );
+    console.error("Gagal ambil data user:", error);
     if (error.response?.status === 401) router.replace("/login");
   }
 };
@@ -678,10 +679,13 @@ onMounted(() => {
   fetchData();
   fetchUserPrepAbsen();
 });
+
+// Pastikan stream kamera dimatikan saat komponen di-unmount
+onUnmounted(() => stopPwaCamera());
 </script>
 
 <style scoped>
-/* ─── Header ────────────────────────────────────── */
+/* ─── Header ─── */
 .absen-app-header {
   --background: #1e3a8a;
   background: #1e3a8a;
@@ -691,7 +695,6 @@ onMounted(() => {
 .absen-app-header::after {
   display: none !important;
 }
-
 .absen-toolbar {
   --background: transparent;
   --border-color: transparent;
@@ -699,32 +702,36 @@ onMounted(() => {
   --padding-bottom: 4px;
   padding-top: 5%;
 }
-
+.back-btn {
+  --color: rgba(255, 255, 255, 0.85);
+  --background: rgba(255, 255, 255, 0.12);
+  --border-radius: 10px;
+  --padding-start: 8px;
+  --padding-end: 8px;
+  margin-left: 4px;
+}
 .toolbar-title-block {
   display: flex;
   flex-direction: column;
   gap: 1px;
   padding-left: 8px;
 }
-
 .toolbar-title {
   font-size: 17px;
   font-weight: 800;
-  color: #ffffff;
+  color: #fff;
   line-height: 1.2;
 }
-
 .toolbar-subtitle {
   font-size: 11px;
   color: rgba(255, 255, 255, 0.6);
   font-weight: 500;
 }
 
-/* ─── Content ───────────────────────────────────── */
+/* ─── Content ─── */
 ion-content {
   --background: #f0f4f8;
 }
-
 .absen-wrapper {
   padding: 20px 16px 40px;
   display: flex;
@@ -732,16 +739,15 @@ ion-content {
   gap: 16px;
 }
 
-/* ─── Camera Card ───────────────────────────────── */
+/* ─── Camera Card ─── */
 .camera-card {
-  background: #ffffff;
+  background: #fff;
   border-radius: 20px;
   overflow: hidden;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
   display: flex;
   flex-direction: column;
 }
-
 .camera-label {
   display: flex;
   align-items: center;
@@ -752,7 +758,6 @@ ion-content {
   color: #334155;
   border-bottom: 1px solid #f1f5f9;
 }
-
 .cam-icon {
   font-size: 18px;
   color: #2563eb;
@@ -765,13 +770,21 @@ ion-content {
   position: relative;
   width: 100%;
   background: #0f172a;
+  min-height: 220px;
 }
-
 .video-feed {
   width: 100%;
   display: block;
   max-height: 280px;
   object-fit: cover;
+}
+.canvas-hidden {
+  display: none !important;
+}
+
+/* Mirror video preview (selfie lazimnya mirror) */
+video.video-feed {
+  transform: scaleX(-1);
 }
 
 .selfie-taken-badge {
@@ -789,6 +802,7 @@ ion-content {
   align-items: center;
   gap: 5px;
   backdrop-filter: blur(4px);
+  white-space: nowrap;
 }
 
 .selfie-btn {
@@ -799,7 +813,7 @@ ion-content {
   margin: 14px 16px;
   padding: 14px;
   background: linear-gradient(135deg, #4a90e2, #2563eb);
-  color: #ffffff;
+  color: #fff;
   font-size: 14px;
   font-weight: 700;
   border: none;
@@ -812,14 +826,23 @@ ion-content {
 .selfie-btn:active {
   transform: scale(0.97);
 }
-
+.selfie-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}
 .selfie-btn-icon {
   font-size: 20px;
 }
+.selfie-spinner {
+  --color: #fff;
+  width: 18px;
+  height: 18px;
+}
 
-/* ─── Info Cards ────────────────────────────────── */
+/* ─── Info Cards ─── */
 .info-card {
-  background: #ffffff;
+  background: #fff;
   border-radius: 20px;
   padding: 14px 16px 16px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
@@ -827,44 +850,52 @@ ion-content {
   flex-direction: column;
   gap: 10px;
 }
-
 .info-card-header {
   display: flex;
   align-items: center;
   gap: 8px;
 }
-
 .info-card-icon {
   font-size: 18px;
   padding: 6px;
   border-radius: 8px;
 }
-
 .loc-color {
   color: #16a34a;
   background: #f0fdf4;
 }
-
 .note-color {
   color: #7c3aed;
   background: #f5f3ff;
 }
-
 .info-card-title {
   font-size: 13px;
   font-weight: 700;
   color: #334155;
   flex: 1;
 }
-
 .loading-dot-wrap {
   margin-left: auto;
 }
-
 .loc-spinner {
   --color: #2563eb;
   width: 18px;
   height: 18px;
+}
+
+.retry-loc-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #2563eb;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 20px;
+  cursor: pointer;
 }
 
 .loc-text {
@@ -877,25 +908,22 @@ ion-content {
   border-radius: 10px;
   border: 1px solid #e2e8f0;
 }
-
 .loc-placeholder {
   color: #94a3b8;
   font-style: italic;
 }
 
-/* ─── Custom Input ──────────────────────────────── */
+/* ─── Input ─── */
 .custom-input-wrap {
   background: #f8fafc;
   border-radius: 12px;
   border: 1.5px solid #e2e8f0;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
-
 .custom-input-wrap:focus-within {
   border-color: #2563eb;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
-
 .custom-input {
   width: 100%;
   padding: 13px 14px;
@@ -907,13 +935,12 @@ ion-content {
   outline: none;
   box-sizing: border-box;
 }
-
 .custom-input::placeholder {
   color: #94a3b8;
   font-weight: 400;
 }
 
-/* ─── Hadir Button ──────────────────────────────── */
+/* ─── Hadir Button ─── */
 .hadir-btn {
   display: flex;
   align-items: center;
@@ -922,7 +949,7 @@ ion-content {
   width: 100%;
   padding: 18px;
   background: linear-gradient(135deg, #1e3a8a, #2563eb);
-  color: #ffffff;
+  color: #fff;
   font-size: 16px;
   font-weight: 800;
   border: none;
@@ -933,50 +960,42 @@ ion-content {
   letter-spacing: 0.3px;
   -webkit-tap-highlight-color: transparent;
 }
-
 .hadir-btn:active:not(.hadir-btn-disabled) {
   transform: scale(0.97);
   box-shadow: 0 3px 10px rgba(37, 99, 235, 0.25);
 }
-
 .hadir-btn-disabled {
   background: #e2e8f0;
   color: #94a3b8;
   box-shadow: none;
   cursor: not-allowed;
 }
-
 .hadir-icon {
   font-size: 22px;
 }
-
 .hadir-spinner {
-  --color: #ffffff;
+  --color: #fff;
   width: 22px;
   height: 22px;
 }
 </style>
 
-<!-- Style global untuk alertController — tidak bisa scoped -->
+<!-- Style global untuk alertController -->
 <style>
 .custom-alert .alert-wrapper {
   border-radius: 20px !important;
   overflow: hidden;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18) !important;
 }
-
 .custom-alert .alert-head {
   background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%) !important;
   padding: 18px 20px 14px !important;
 }
-
 .custom-alert .alert-title {
-  color: #ffffff !important;
+  color: #fff !important;
   font-size: 17px !important;
   font-weight: 800 !important;
-  letter-spacing: -0.2px;
 }
-
 .custom-alert .alert-message {
   color: #334155 !important;
   font-size: 14px !important;
@@ -984,30 +1003,26 @@ ion-content {
   line-height: 1.6 !important;
   padding: 16px 20px !important;
 }
-
 .custom-alert .alert-button-group {
   padding: 4px 12px 12px !important;
 }
-
 .custom-alert .alert-button {
   border-radius: 12px !important;
   font-weight: 700 !important;
   font-size: 14px !important;
   color: #2563eb !important;
 }
-
 .custom-alert .alert-button:last-child {
   background: linear-gradient(135deg, #1e3a8a, #2563eb) !important;
-  color: #ffffff !important;
+  color: #fff !important;
   border-radius: 12px !important;
 }
-
 .custom-alert .alert-button:last-child .alert-button-inner {
-  color: #ffffff !important;
+  color: #fff !important;
   justify-content: center;
 }
 
-/* ─── Camera Placeholder (Modern) ──────────────── */
+/* ─── Camera Placeholder ─── */
 .camera-placeholder {
   display: flex;
   flex-direction: column;
@@ -1019,8 +1034,6 @@ ion-content {
   position: relative;
   overflow: hidden;
 }
-
-/* Dot grid background texture */
 .camera-placeholder::before {
   content: "";
   position: absolute;
@@ -1033,8 +1046,6 @@ ion-content {
   background-size: 20px 20px;
   pointer-events: none;
 }
-
-/* Animated pulse ring */
 .cam-pulse-ring {
   position: absolute;
   width: 110px;
@@ -1043,7 +1054,6 @@ ion-content {
   border: 2px solid rgba(37, 99, 235, 0.35);
   animation: camPulse 2.4s ease-out infinite;
 }
-
 @keyframes camPulse {
   0% {
     transform: scale(0.85);
@@ -1058,8 +1068,6 @@ ion-content {
     opacity: 0;
   }
 }
-
-/* Icon circle */
 .cam-circle {
   width: 76px;
   height: 76px;
@@ -1073,13 +1081,11 @@ ion-content {
   z-index: 1;
   margin-bottom: 16px;
 }
-
 .placeholder-icon {
   font-size: 34px;
-  color: #ffffff;
+  color: #fff;
   filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.3));
 }
-
 .cam-placeholder-text {
   font-size: 13px;
   font-weight: 600;
@@ -1087,7 +1093,6 @@ ion-content {
   margin: 0 0 10px;
   z-index: 1;
 }
-
 .cam-hint-badge {
   font-size: 11px;
   font-weight: 500;
@@ -1097,6 +1102,5 @@ ion-content {
   padding: 4px 12px;
   border-radius: 20px;
   z-index: 1;
-  letter-spacing: 0.2px;
 }
 </style>
