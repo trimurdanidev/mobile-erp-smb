@@ -279,7 +279,35 @@ const openCamera = async (): Promise<boolean> => {
     // iOS Safari kadang perlu dipaksa play setelah srcObject di-set
     try {
       await videoRef.value.play();
-    } catch (playErr) {
+    }
+    isScanning.value = true;
+
+    // ── KONDISI 1: JIKA DEVICE MENDUKUNG BARCODEDETECTOR NATIVE (Android / Chrome Desktop) ──
+    if ("BarcodeDetector" in window) {
+      const detector = new (window as any).BarcodeDetector({
+        formats: [
+          "code_128",
+          "code_39",
+          "ean_13",
+          "ean_8",
+          "qr_code",
+          "data_matrix",
+        ],
+      });
+
+      scanInterval = setInterval(async () => {
+        if (!videoRef.value || videoRef.value.readyState < 2) return;
+        if (isProcessing.value) return;
+        try {
+          const barcodes = await detector.detect(videoRef.value);
+          if (barcodes.length > 0) {
+            await submitPackingAuto(barcodes[0].rawValue);
+          }
+        } catch (_) {}
+      }, 500);
+
+      // ── KONDISI 2: FALLBACK UNTUK IPHONE / SAFARI (Menggunakan html5-qrcode) ──
+    } else {
       console.warn(
         "Video play error (aman di-ignore di beberapa device):",
         playErr
@@ -341,12 +369,33 @@ const startZXingScanner = async () => {
       delayBetweenScanAttempts: 300,
     });
 
-    // Decode terus-menerus dari video element
-    zxingReader.decodeFromVideoElement(
-      videoRef.value,
-      async (result: any, err: any) => {
-        if (result && !isProcessing.value) {
-          await submitPackingAuto(result.getText());
+      // Pastikan Anda punya ID element pembungkus video, atau pasang langsung ke video element jika disupport.
+      // Di sini kita asumsikan videoRef Anda memiliki id atau kita buat instance scan dari stream yang ada.
+      // Pendekatan terbaik html5-qrcode untuk local stream:
+
+      const elementId = "video-container-id"; // ← Ganti dengan ID tag pembungkus <video> Anda atau elemen kosong khusus scan
+
+      html5QrcodeScanner = new Html5Qrcode(elementId);
+
+      // Menggunakan konfigurasi FPS dan QR Box
+      const config = {
+        fps: 10,
+        qrbox: (width: number, height: number) => {
+          return { width: width * 0.7, height: height * 0.7 }; // area scan kotak di tengah
+        },
+      };
+
+      // Jalankan scanner khusus menggunakan camera facingMode 'environment'
+      await html5QrcodeScanner.start(
+        { facingMode: "environment" },
+        config,
+        async (decodedText) => {
+          // Callback ketika barcode berhasil terdeteksi
+          if (isProcessing.value) return;
+          await submitPackingAuto(decodedText);
+        },
+        () => {
+          // Callback saat gagal mendeteksi di frame tersebut (bisa diabaikan agar tidak spam log)
         }
         // err di sini normal (NotFoundException tiap frame kosong) — abaikan
       }
@@ -368,50 +417,46 @@ const toggleScan = async () => {
   }
 };
 
-const startScan = async () => {
-  const cameraOk = await openCamera();
-  if (!cameraOk) return;
-
-  isScanning.value = true;
-
-  if (isBarcodeDetectorSupported()) {
-    await startNativeScanner();
-  } else {
-    // Fallback ZXing untuk iOS Safari / Firefox
-    await startZXingScanner();
-  }
-};
-
-const stopScan = () => {
-  // Hentikan interval native
+const stopScan = async () => {
   if (scanInterval) {
     clearInterval(scanInterval);
-    scanInterval = null;
+    scanInterval = null; // ✅ null, bukan cuma clear
   }
 
-  // Hentikan ZXing decoder
-  if (zxingReader) {
+  if (html5QrcodeScanner) {
     try {
-      zxingReader.reset();
-    } catch (_) {}
-    zxingReader = null;
+      if (html5QrcodeScanner.isScanning) {
+        await html5QrcodeScanner.stop();
+        await html5QrcodeScanner.clear(); // ✅ release DOM
+      }
+    } catch (err) {
+      console.error("Gagal menghentikan html5QrcodeScanner:", err);
+    }
+    html5QrcodeScanner = null;
   }
 
   // Matikan stream kamera
   if (stream) {
-    stream.getTracks().forEach((t) => t.stop());
+    stream.getTracks().forEach((track) => {
+      track.stop();
+      track.enabled = false; // ✅ force disable
+    });
     stream = null;
   }
 
   if (videoRef.value) {
+    videoRef.value.pause();
     videoRef.value.srcObject = null;
+    videoRef.value.load(); // ✅ reset video element
   }
 
   isScanning.value = false;
   scanEngine.value = "";
 };
 
-onUnmounted(() => stopScan());
+onUnmounted(async () => {
+  await stopScan();
+});
 
 // ── Submit Auto dari Scanner ───────────────────────
 const submitPackingAuto = async (scanned: string) => {
