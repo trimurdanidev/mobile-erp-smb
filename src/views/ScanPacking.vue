@@ -310,7 +310,7 @@ const startNativeScanner = async () => {
     try {
       const barcodes = await detector.detect(videoRef.value);
       if (barcodes.length > 0) {
-        await submitResiAuto(barcodes[0].rawValue);
+        await submitPackingAuto(barcodes[0].rawValue);
       }
     } catch (_) {}
   }, 500);
@@ -346,7 +346,7 @@ const startZXingScanner = async () => {
       videoRef.value,
       async (result: any, err: any) => {
         if (result && !isProcessing.value) {
-          await submitResiAuto(result.getText());
+          await submitPackingAuto(result.getText());
         }
         // err di sini normal (NotFoundException tiap frame kosong) — abaikan
       }
