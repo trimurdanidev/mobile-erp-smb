@@ -1,6 +1,5 @@
 <template>
   <ion-page>
-    <!-- Header -->
     <ion-header class="scan-app-header" :translucent="false">
       <ion-toolbar class="scan-toolbar">
         <ion-buttons slot="start">
@@ -25,10 +24,9 @@
               class="scan-section-icon"
             ></ion-icon>
             <span class="scan-section-title">Barcode Resi</span>
-            <!-- Badge info engine yang aktif -->
-            <span class="engine-badge" v-if="isScanning">
-              {{ scanEngine }}
-            </span>
+            <span class="engine-badge" v-if="isScanning && scanEngine">{{
+              scanEngine
+            }}</span>
           </div>
 
           <div class="camera-box" :class="{ 'camera-active': isScanning }">
@@ -40,9 +38,6 @@
               playsinline
               muted
             ></video>
-
-            <!-- Canvas tersembunyi — dipakai ZXing untuk capture frame -->
-            <canvas ref="canvasRef" class="canvas-hidden"></canvas>
 
             <!-- Scan overlay -->
             <div class="scan-overlay" v-if="isScanning">
@@ -148,7 +143,7 @@
     </ion-content>
 
     <!-- ══════════════════════════════════════
-         MODAL PILIH MARKETPLACE (Dinamis dari API)
+         MODAL PILIH MARKETPLACE
     ══════════════════════════════════════ -->
     <ion-modal
       :is-open="isShopModalOpen"
@@ -158,10 +153,13 @@
       <div class="shop-modal-inner">
         <!-- Header modal -->
         <div class="shop-modal-header">
-          <button class="modal-x-btn" @click="cancelShopModal" :disabled="submitShopLoading">
+          <button
+            class="modal-x-btn"
+            @click="cancelShopModal"
+            :disabled="submitShopLoading"
+          >
             <ion-icon :icon="closeOutline"></ion-icon>
           </button>
-
           <div class="shop-modal-icon-wrap">
             <ion-icon
               :icon="alertCircleOutline"
@@ -175,15 +173,13 @@
           </div>
         </div>
 
-        <!-- Pilihan Marketplace — DINAMIS dari API -->
+        <!-- Pilihan Marketplace -->
         <div class="marketplace-list">
-          <!-- Loading state saat fetch marketplace -->
           <div v-if="isLoadingMarketplace" class="marketplace-loading-state">
             <ion-spinner name="crescent" color="primary"></ion-spinner>
             <p>Memuat daftar marketplace...</p>
           </div>
 
-          <!-- Empty state kalau API gagal/kosong -->
           <div
             v-else-if="marketplaceList.length === 0"
             class="marketplace-empty-state"
@@ -196,7 +192,6 @@
             </button>
           </div>
 
-          <!-- List marketplace dari API -->
           <button
             v-else
             v-for="shop in marketplaceList"
@@ -298,10 +293,11 @@ import { playBeep } from "@/services/audioService";
 const resiNo = ref("");
 const loading = ref(false);
 const isScanning = ref(false);
-const videoRef = ref<HTMLVideoElement | null>(null);
-const canvasRef = ref<HTMLCanvasElement | null>(null);
-const lastResult = ref<any>(null);
 const isProcessing = ref(false);
+const isMounted = ref(true);
+const videoRef = ref<HTMLVideoElement | null>(null);
+const lastResult = ref<any>(null);
+const scanEngine = ref("");
 
 // ── Shop Modal State ───────────────────────────────
 const isShopModalOpen = ref(false);
@@ -309,7 +305,7 @@ const pendingResi = ref("");
 const selectedShop = ref<string | null>(null);
 const submitShopLoading = ref(false);
 
-// ── Marketplace List (dinamis dari API) ────────────
+// ── Marketplace ────────────────────────────────────
 interface MarketplaceItem {
   id: number;
   marketplace_name: string;
@@ -322,16 +318,11 @@ const isLoadingMarketplace = ref(false);
 const userData = JSON.parse(localStorage.getItem("master_user") || "{}");
 const scannedBy = userData.user || "unknown";
 
-// ── Fetch daftar marketplace dari API ──────────────
 const fetchMarketplaceList = async () => {
   isLoadingMarketplace.value = true;
   try {
     const response = await api.get("/getListMarketplace");
-    if (response.data.success) {
-      marketplaceList.value = response.data.data;
-    } else {
-      marketplaceList.value = [];
-    }
+    marketplaceList.value = response.data.success ? response.data.data : [];
   } catch (err) {
     console.error("Gagal mengambil daftar marketplace:", err);
     marketplaceList.value = [];
@@ -340,23 +331,17 @@ const fetchMarketplaceList = async () => {
   }
 };
 
-// Fallback gambar kalau logo gagal di-load
 const handleLogoError = (event: Event) => {
   (event.target as HTMLImageElement).src =
     "https://placehold.co/100x100/f1f5f9/94a3b8?text=Shop";
 };
 
-// ── Scanner ────────────────────────────────────────
+// ── Scanner internals ──────────────────────────────
 let stream: MediaStream | null = null;
-let scanInterval: any = null;
-let zxingReader: any = null; // instance ZXingBrowser.BrowserMultiFormatReader
+let scanInterval: ReturnType<typeof setInterval> | null = null;
+let zxingReader: any = null;
 
-// ── Deteksi support BarcodeDetector (Chrome / Android) ─
-const isBarcodeDetectorSupported = (): boolean => {
-  return typeof (window as any).BarcodeDetector !== "undefined";
-};
-
-// ── Buka stream kamera (cross-browser) ────────────
+// ── Buka kamera ────────────────────────────────────
 const openCamera = async (): Promise<boolean> => {
   if (!navigator.mediaDevices?.getUserMedia) {
     await showToast(
@@ -366,19 +351,24 @@ const openCamera = async (): Promise<boolean> => {
     return false;
   }
 
+  const constraints: MediaStreamConstraints[] = [
+    {
+      video: {
+        facingMode: { exact: "environment" },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+    },
+    { video: { facingMode: "environment" } },
+    { video: true },
+  ];
+
+  for (const constraint of constraints) {
     try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { exact: "environment" },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-      });
-    } catch (exactErr) {
-      console.warn("exact environment gagal, fallback:", exactErr);
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
-      });
+      stream = await navigator.mediaDevices.getUserMedia(constraint);
+      break;
+    } catch (e) {
+      console.warn("Coba constraint berikutnya:", e);
     }
   }
 
@@ -392,86 +382,118 @@ const openCamera = async (): Promise<boolean> => {
 
   if (videoRef.value) {
     videoRef.value.srcObject = stream;
-    // iOS Safari kadang perlu dipaksa play setelah srcObject di-set
     try {
       await videoRef.value.play();
+    } catch (playErr) {
+      console.warn("Video play warning (aman):", playErr);
     }
-    isScanning.value = true;
+  }
 
-    if ("BarcodeDetector" in window) {
-      const detector = new (window as any).BarcodeDetector({
-        formats: [
-          "code_128",
-          "code_39",
-          "ean_13",
-          "ean_8",
-          "qr_code",
-          "data_matrix",
-        ],
-      });
+  return true;
+};
 
-      scanInterval = setInterval(async () => {
-        if (!videoRef.value || videoRef.value.readyState < 2) return;
-        if (isProcessing.value) return;
-        try {
-          const barcodes = await detector.detect(videoRef.value);
-          if (barcodes.length > 0) {
-            await submitResiAuto(barcodes[0].rawValue);
-          }
-        } catch (_) {}
-      }, 500);
-    } else {
-      console.warn(
-        "BarcodeDetector tidak didukung, menggunakan fallback html5-qrcode."
-      );
-      const elementId = "video-container-id";
-      html5QrcodeScanner = new Html5Qrcode(elementId);
-      const config = {
-        fps: 10,
-        qrbox: (width: number, height: number) => ({
-          width: width * 0.7,
-          height: height * 0.7,
-        }),
-      };
-      await html5QrcodeScanner.start(
-        { facingMode: "environment" },
-        config,
-        async (decodedText) => {
-          if (isProcessing.value) return;
-          await submitResiAuto(decodedText);
-        },
-        () => {}
+// ── Engine 1: Native BarcodeDetector (Android/Chrome) ──
+const startNativeScanner = () => {
+  scanEngine.value = "Native";
+
+  const detector = new (window as any).BarcodeDetector({
+    formats: [
+      "code_128",
+      "code_39",
+      "ean_13",
+      "ean_8",
+      "qr_code",
+      "data_matrix",
+    ],
+  });
+
+  scanInterval = setInterval(async () => {
+    if (!videoRef.value || videoRef.value.readyState < 2) return;
+    if (isProcessing.value || !isMounted.value) return;
+    try {
+      const barcodes = await detector.detect(videoRef.value);
+      if (barcodes.length > 0) {
+        await submitResiAuto(barcodes[0].rawValue);
+      }
+    } catch (_) {}
+  }, 500);
+};
+
+// ── Engine 2: ZXing (iOS Safari, Firefox, dll) ────
+const startZXingScanner = async () => {
+  scanEngine.value = "ZXing";
+
+  try {
+    const ZXingBrowser = await import("@zxing/browser");
+    const ZXingLibrary = await import("@zxing/library");
+
+    const hints = new Map();
+    hints.set(ZXingLibrary.DecodeHintType.POSSIBLE_FORMATS, [
+      ZXingLibrary.BarcodeFormat.CODE_128,
+      ZXingLibrary.BarcodeFormat.CODE_39,
+      ZXingLibrary.BarcodeFormat.EAN_13,
+      ZXingLibrary.BarcodeFormat.EAN_8,
+      ZXingLibrary.BarcodeFormat.QR_CODE,
+      ZXingLibrary.BarcodeFormat.DATA_MATRIX,
+      ZXingLibrary.BarcodeFormat.ITF,
+    ]);
+
+    zxingReader = new ZXingBrowser.BrowserMultiFormatReader(hints, {
+      delayBetweenScanAttempts: 300,
+    });
+
+    if (videoRef.value && stream) {
+      await zxingReader.decodeFromStream(
+        stream,
+        videoRef.value,
+        async (result: any) => {
+          if (!result || isProcessing.value || !isMounted.value) return;
+          await submitResiAuto(result.getText());
+        }
       );
     }
-  } catch (err: any) {
-    console.error("Kamera error:", err);
-    await showToast("Gagal akses kamera: " + (err.message || err), "danger");
+  } catch (importErr) {
+    console.error("Gagal load ZXing:", importErr);
+    await showToast(
+      "Scanner tidak dapat dimuat. Coba gunakan Input Manual.",
+      "warning"
+    );
+  }
+};
+
+// ── Start / Stop / Toggle ──────────────────────────
+const startScan = async () => {
+  const cameraOk = await openCamera();
+  if (!cameraOk) return;
+
+  isScanning.value = true;
+
+  if (typeof (window as any).BarcodeDetector !== "undefined") {
+    startNativeScanner();
+  } else {
+    await startZXingScanner();
   }
 };
 
 const stopScan = async () => {
   if (scanInterval) {
     clearInterval(scanInterval);
-    scanInterval = null; // ✅
+    scanInterval = null;
   }
 
-  if (html5QrcodeScanner) {
+  if (zxingReader) {
     try {
-      if (html5QrcodeScanner.isScanning) {
-        await html5QrcodeScanner.stop();
-        await html5QrcodeScanner.clear(); // ✅
-      }
-    } catch (err) {
-      console.error("Gagal menghentikan html5QrcodeScanner:", err);
+      zxingReader.reset();
+    } catch (e) {
+      console.warn("ZXing reset:", e);
     }
-    html5QrcodeScanner = null;
+    zxingReader = null;
   }
 
-  // Matikan stream kamera
   if (stream) {
     stream.getTracks().forEach((track) => {
       track.stop();
-      track.enabled = false; // ✅
+      track.enabled = false;
     });
     stream = null;
   }
@@ -479,30 +501,25 @@ const stopScan = async () => {
   if (videoRef.value) {
     videoRef.value.pause();
     videoRef.value.srcObject = null;
-    videoRef.value.load(); // ✅
+    videoRef.value.load();
   }
 
   isScanning.value = false;
-  isProcessing.value = false; // ✅ reset flag
+  isProcessing.value = false;
+  scanEngine.value = "";
 };
 
 const toggleScan = async () => {
-  if (isScanning.value) stopScan();
+  if (isScanning.value) await stopScan();
   else await startScan();
 };
 
 onMounted(() => {
-  // Prefetch daftar marketplace di awal biar modal langsung siap saat dibutuhkan
   fetchMarketplaceList();
 });
 
 onUnmounted(async () => {
-  await stopScan();
-});
-
-const isMounted = ref(true);
-onUnmounted(async () => {
-  isMounted.value = false; // ✅ set false dulu
+  isMounted.value = false;
   await stopScan();
 });
 
@@ -510,17 +527,11 @@ onUnmounted(async () => {
 const handleScanResponse = (response: any, resi: string) => {
   const data = response.data;
 
-  // Cek need_shop_label → buka modal pilih marketplace
   if (!data.success && data.need_shop_label === true) {
     pendingResi.value = data.data?.resi_no || resi;
     selectedShop.value = null;
     isShopModalOpen.value = true;
-
-    // Refresh daftar marketplace tiap kali modal dibuka,
-    // jaga-jaga ada marketplace baru ditambahkan di backend
-    if (marketplaceList.value.length === 0) {
-      fetchMarketplaceList();
-    }
+    if (marketplaceList.value.length === 0) fetchMarketplaceList();
     return;
   }
 
@@ -545,7 +556,7 @@ const handleScanResponse = (response: any, resi: string) => {
 
 // ── Submit Auto dari Scanner ───────────────────────
 const submitResiAuto = async (scanned: string) => {
- if (!scanned.trim() || isProcessing.value || !isMounted.value) return; // ✅ cek isMounted
+  if (!scanned.trim() || isProcessing.value || !isMounted.value) return;
   isProcessing.value = true;
   lastResult.value = null;
 
@@ -554,8 +565,9 @@ const submitResiAuto = async (scanned: string) => {
       resi_no: scanned.trim(),
       scanned_by: scannedBy,
     });
-    handleScanResponse(response, scanned.trim());
+    if (isMounted.value) handleScanResponse(response, scanned.trim());
   } catch (err: any) {
+    if (!isMounted.value) return;
     if (err.response?.data?.need_shop_label === true) {
       pendingResi.value = err.response.data?.data?.resi_no || scanned.trim();
       selectedShop.value = null;
@@ -569,7 +581,7 @@ const submitResiAuto = async (scanned: string) => {
     }
   } finally {
     setTimeout(() => {
-      isProcessing.value = false;
+      if (isMounted.value) isProcessing.value = false;
     }, 2000);
   }
 };
@@ -619,7 +631,7 @@ const selectAndSubmit = async (shopName: string) => {
     const response = await api.post("/resi/scan-pickup", {
       resi_no: pendingResi.value,
       scanned_by: scannedBy,
-      shop_label: shopName, // ← kirim nama marketplace yang dipilih ke backend
+      shop_label: shopName,
     });
 
     const data = response.data;
@@ -661,16 +673,11 @@ const cancelShopModal = () => {
   isShopModalOpen.value = false;
   selectedShop.value = null;
   pendingResi.value = "";
-  lastResult.value = {
-    success: false,
-    message: "Scan dibatalkan.",
-    resi: "",
-  };
+  lastResult.value = { success: false, message: "Scan dibatalkan.", resi: "" };
 };
 </script>
 
 <style scoped>
-/* ─── Header ── */
 .scan-app-header {
   --background: #1e3a8a;
   background: #1e3a8a;
@@ -713,7 +720,6 @@ const cancelShopModal = () => {
   font-weight: 500;
 }
 
-/* ─── Engine Badge ── */
 .engine-badge {
   margin-left: auto;
   font-size: 10px;
@@ -725,7 +731,6 @@ const cancelShopModal = () => {
   border-radius: 20px;
 }
 
-/* ─── Content ── */
 ion-content {
   --background: #f0f4f8;
 }
@@ -736,7 +741,6 @@ ion-content {
   gap: 14px;
 }
 
-/* ─── Card ── */
 .scan-card {
   background: #fff;
   border-radius: 20px;
@@ -763,7 +767,6 @@ ion-content {
   color: #334155;
 }
 
-/* ─── Camera Box ── */
 .camera-box {
   position: relative;
   width: 100%;
@@ -780,7 +783,6 @@ ion-content {
   display: none !important;
 }
 
-/* ─── Camera Placeholder ── */
 .camera-placeholder {
   position: absolute;
   inset: 0;
@@ -841,7 +843,7 @@ ion-content {
 }
 .placeholder-icon {
   font-size: 34px;
-  color: #ffffff;
+  color: #fff;
   filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.3));
 }
 .cam-placeholder-text {
@@ -863,7 +865,6 @@ ion-content {
   letter-spacing: 0.2px;
 }
 
-/* ─── Scan Overlay ── */
 .scan-overlay {
   position: absolute;
   inset: 0;
@@ -922,7 +923,6 @@ ion-content {
   font-weight: 700;
 }
 
-/* ─── Input ── */
 .input-row {
   padding: 14px 16px;
 }
@@ -942,7 +942,6 @@ ion-content {
   border-color: #2563eb;
 }
 
-/* ─── Result ── */
 .result-card {
   background: #fff;
   border-radius: 16px;
@@ -987,7 +986,6 @@ ion-content {
   font-family: monospace;
 }
 
-/* ─── Submit Button ── */
 .submit-btn {
   display: flex;
   align-items: center;
@@ -1025,19 +1023,15 @@ ion-content {
   height: 18px;
 }
 
-/* ════════════════════════════════════
-   SHOP LABEL MODAL
-════════════════════════════════════ */
+/* ════ SHOP LABEL MODAL ════ */
 .shop-modal-inner {
   display: flex;
   flex-direction: column;
   background: #f8fafc;
   height: 100%;
 }
-
-/* Header modal */
 .shop-modal-header {
-  position: relative; /* ← TAMBAH INI */
+  position: relative;
   background: #ffffff;
   padding: 24px 20px 20px;
   border-bottom: 1px solid #e2e8f0;
@@ -1082,7 +1076,6 @@ ion-content {
   border-radius: 4px;
 }
 
-/* Marketplace List */
 .marketplace-list {
   flex: 1;
   padding: 16px;
@@ -1091,8 +1084,6 @@ ion-content {
   gap: 10px;
   overflow-y: auto;
 }
-
-/* Loading / empty state untuk fetch marketplace */
 .marketplace-loading-state,
 .marketplace-empty-state {
   display: flex;
@@ -1134,7 +1125,7 @@ ion-content {
   gap: 14px;
   width: 100%;
   padding: 14px 16px;
-  background: #ffffff;
+  background: #fff;
   border: 1.5px solid #e2e8f0;
   border-radius: 16px;
   cursor: pointer;
@@ -1157,7 +1148,6 @@ ion-content {
   border-color: #93c5fd !important;
 }
 
-/* Logo area — sekarang pakai <img> dari API */
 .marketplace-logo-wrap {
   width: 52px;
   height: 52px;
@@ -1177,7 +1167,6 @@ ion-content {
   object-fit: contain;
 }
 
-/* Info */
 .marketplace-info {
   flex: 1;
   display: flex;
@@ -1195,7 +1184,6 @@ ion-content {
   color: #94a3b8;
 }
 
-/* Action icon */
 .marketplace-action {
   display: flex;
   align-items: center;
@@ -1216,10 +1204,9 @@ ion-content {
   height: 20px;
 }
 
-/* Footer modal */
 .shop-modal-footer {
   padding: 14px 16px 24px;
-  background: #ffffff;
+  background: #fff;
   border-top: 1px solid #e2e8f0;
 }
 .btn-cancel-shop {
@@ -1227,7 +1214,7 @@ ion-content {
   padding: 12px;
   border: 1.5px solid #e2e8f0;
   border-radius: 12px;
-  background: #ffffff;
+  background: #fff;
   color: #64748b;
   font-size: 13px;
   font-weight: 700;
@@ -1255,7 +1242,7 @@ ion-modal.shop-label-modal {
 ion-modal.shop-label-modal::part(content) {
   border-radius: 24px 24px 0 0;
 }
-/* ── Tombol X pojok kanan atas ── */
+
 .modal-x-btn {
   position: absolute;
   top: 16px;
@@ -1281,7 +1268,6 @@ ion-modal.shop-label-modal::part(content) {
   opacity: 0.4;
 }
 
-/* ── Safe area fix — footer naik dari bawah ── */
 .shop-modal-footer {
   padding: 14px 16px calc(24px + env(safe-area-inset-bottom));
   background: #ffffff;
