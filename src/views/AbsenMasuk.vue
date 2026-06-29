@@ -73,6 +73,7 @@
           <!-- Tombol kamera — berubah konteks sesuai state -->
           <button
             class="selfie-btn"
+            :class="{ 'selfie-btn-locked': isAbsenLocked }"
             @click="handleCameraBtn"
             :disabled="cameraLoading"
           >
@@ -83,10 +84,10 @@
             ></ion-spinner>
             <template v-else>
               <ion-icon
-                :icon="cameraOutline"
+                :icon="isAbsenLocked ? lockClosedOutline : cameraOutline"
                 class="selfie-btn-icon"
               ></ion-icon>
-              {{ cameraBtnLabel }}
+              {{ isAbsenLocked ? "Absen Terkunci" : cameraBtnLabel }}
             </template>
           </button>
         </div>
@@ -191,6 +192,7 @@ import {
   checkmarkDoneOutline,
   checkmarkCircleOutline,
   refreshOutline,
+  lockClosedOutline,
 } from "ionicons/icons";
 import router from "@/router";
 import { Capacitor } from "@capacitor/core";
@@ -229,6 +231,7 @@ const phone = ref(null);
 const nik = ref(null);
 const description = ref(null);
 const department_name = ref(null);
+const start_time = ref(null);
 
 // Stream kamera (PWA mode)
 let cameraStream = null;
@@ -474,19 +477,22 @@ const takeSelfieNative = async () => {
 
 // ── Handler tombol kamera (satu tombol, tiga state) ─
 const handleCameraBtn = async () => {
+  // Cek lock dulu sebelum buka kamera
+  if (isAbsenLocked.value) {
+    await showLockedAlert();
+    return;
+  }
+
   if (isPwaMode) {
     if (selfieTaken.value || !isCameraOpen.value) {
-      // Reset dulu kalau mau ambil ulang
       selfieTaken.value = false;
       selfieImage.value = null;
       rawBase64.value = null;
       await openPwaCamera();
     } else if (isCameraOpen.value) {
-      // Kamera sudah terbuka — ambil foto sekarang
       capturePwaPhoto();
     }
   } else {
-    // Native Capacitor
     await takeSelfieNative();
   }
 };
@@ -668,10 +674,41 @@ const fetchUserPrepAbsen = async () => {
     baseLocation_lat.value = d.base_location_lat;
     baseLocation_long.value = d.base_location_long;
     statusUser_base.value = d.is_mobile;
+    start_time.value = d.start_time;
   } catch (error) {
     console.error("Gagal ambil data user:", error);
     if (error.response?.status === 401) router.replace("/login");
   }
+};
+
+// ── Lock absen jika terlambat > 1 jam dari start_time (is_mobile == 0) ──
+const isAbsenLocked = computed(() => {
+  if (statusUser_base.value != 0) return false; // is_mobile == 1 → bypass, tidak dikunci
+
+  if (!start_time.value) return false;
+
+  const now = new Date();
+
+  // Parse start_time dari string "HH:mm:ss"
+  const [sh, sm, ss] = start_time.value.split(":").map(Number);
+
+  // Batas toleransi = start_time + 1 jam, di hari ini
+  const batas = new Date();
+  batas.setHours(sh, sm + 60, ss ?? 0, 0);
+
+  // Lock hanya jika jam sekarang sudah lewat batas
+  // (otomatis reset besok karena pakai new Date() yang selalu hari ini)
+  return now > batas;
+});
+
+const showLockedAlert = async () => {
+  const alert = await alertController.create({
+    header: "⛔ Absen Terkunci",
+    message: "Anda Terlambat. Besok perbaiki lagi Kehadiran anda",
+    buttons: ["OK"],
+    cssClass: "locked-alert",
+  });
+  await alert.present();
 };
 
 onMounted(() => {
@@ -978,6 +1015,10 @@ video.video-feed {
   width: 22px;
   height: 22px;
 }
+.selfie-btn-locked {
+  background: linear-gradient(135deg, #dc2626, #b91c1c) !important;
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.35) !important;
+}
 </style>
 
 <!-- Style global untuk alertController -->
@@ -1102,5 +1143,30 @@ video.video-feed {
   padding: 4px 12px;
   border-radius: 20px;
   z-index: 1;
+}
+.locked-alert .alert-wrapper {
+  border-radius: 20px !important;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18) !important;
+}
+.locked-alert .alert-head {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%) !important;
+  padding: 18px 20px 14px !important;
+}
+.locked-alert .alert-title {
+  color: #fff !important;
+  font-size: 17px !important;
+  font-weight: 800 !important;
+}
+.locked-alert .alert-message {
+  color: #334155 !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  line-height: 1.6 !important;
+  padding: 16px 20px !important;
+}
+.locked-alert .alert-button {
+  font-weight: 700 !important;
+  color: #dc2626 !important;
 }
 </style>
