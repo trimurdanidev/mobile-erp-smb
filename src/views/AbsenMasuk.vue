@@ -226,6 +226,7 @@ const userData = ref([]);
 const baseLocation_lat = ref("");
 const baseLocation_long = ref("");
 const statusUser_base = ref("");
+const statusUser_office_hour = ref("");
 const user = ref(null);
 const phone = ref(null);
 const nik = ref(null);
@@ -675,6 +676,7 @@ const fetchUserPrepAbsen = async () => {
       headers: { Authorization: `Bearer ${token}` },
     });
     const d = response.data.data;
+    
     phone.value = d.phone;
     nik.value = d.nik;
     description.value = d.description;
@@ -683,6 +685,7 @@ const fetchUserPrepAbsen = async () => {
     baseLocation_lat.value = d.base_location_lat;
     baseLocation_long.value = d.base_location_long;
     statusUser_base.value = d.is_mobile;
+    statusUser_office_hour.value = d.is_office_hour;
     start_time.value = d.start_time;
   } catch (error) {
     console.error("Gagal ambil data user:", error);
@@ -690,9 +693,9 @@ const fetchUserPrepAbsen = async () => {
   }
 };
 
-// ── Lock absen jika terlambat > 1 jam dari start_time (is_mobile == 0) ──
+// ── Lock absen jika terlambat > 1 jam dari start_time (is_office_hour == 0) ──
 const isAbsenLocked = computed(() => {
-  if (statusUser_base.value != 0) return false; // is_mobile == 1 → bypass, tidak dikunci
+  if (statusUser_office_hour.value != 0) return false; // is_office_hour == 1 → bypass, tidak dikunci
 
   if (!start_time.value) return false;
 
