@@ -226,6 +226,7 @@ const userData = ref([]);
 const baseLocation_lat = ref("");
 const baseLocation_long = ref("");
 const statusUser_base = ref("");
+const statusUser_office_hour = ref("");
 const user = ref(null);
 const phone = ref(null);
 const nik = ref(null);
@@ -279,40 +280,31 @@ const time = () => {
 
 const getLocation = async () => {
   try {
-    // 💡 DETEKSI PLATFORM: Jika dijalankan di Browser Web / PWA (Bukan Native App Android)
-
-    if (!window.Capacitor || !window.Capacitor.isNativePlatform()) {
+    // ── PWA / Browser ──────────────────────────────
+    if (!Capacitor.isNativePlatform()) {
       console.log("Menggunakan HTML5 Browser Geolocation untuk Web...");
-
       if (!navigator.geolocation) {
         throw new Error("Browser Anda tidak mendukung fitur Geolocation.");
       }
-
-      // ── PERBAIKAN DI SINI: Sintaks Promise dibuat super clean & standard ──
-
       const position = await new Promise((res, rej) => {
         navigator.geolocation.getCurrentPosition(res, rej, {
           enableHighAccuracy: true,
-
           timeout: 15000,
-
           maximumAge: 0,
         });
       });
-
       latitude.value = position.coords.latitude;
-
       longitude.value = position.coords.longitude;
-
-      return; // Selesai, bypass alur native di bawah
+      return;
     }
 
-    // ── JALUR NATIVE ANDROID APP (Kode Asli Kamu Tetap Dipertahankan) ──
-
+    // ── Native Android / iOS ───────────────────────
     console.log("Menggunakan Capacitor Geolocation untuk Native App...");
 
-    const permission = await Geolocation.requestPermissions();
+    // ✅ WAJIB dynamic import — jangan pakai global Geolocation
+    const { Geolocation } = await import("@capacitor/geolocation");
 
+    const permission = await Geolocation.requestPermissions();
     if (
       permission.location !== "granted" &&
       permission.coarseLocation !== "granted"
@@ -322,31 +314,49 @@ const getLocation = async () => {
 
     const position = await Geolocation.getCurrentPosition({
       enableHighAccuracy: true,
-
       timeout: 15000,
     });
 
     latitude.value = position.coords.latitude;
-
     longitude.value = position.coords.longitude;
+
   } catch (error) {
-    throw error; // ← Tetap dilempar ke fetchData bawaanmu
+    throw error;
   }
 };
 
 // ── Reverse geocoding — hybrid (Capacitor Http / fetch fallback) ─
 const reverseGeocode = async (lat, lon) => {
   const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`;
-  const headers = { "User-Agent": "erpsmb/2.3 (trimurdani78.tm@gmail.com)" };
 
-  if (!isPwaMode) {
-    const { Http } = await import("@capacitor-community/http");
-    const response = await Http.get({ url, headers });
-    return response.data.display_name;
-  } else {
-    const response = await fetch(url, { headers });
+  try {
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "erpsmb/2.3 (trimurdani78.tm@gmail.com)",
+        "Accept": "application/json",
+      },
+    });
+
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
     return data.display_name;
+
+  } catch (fetchErr) {
+    console.warn("fetch reverseGeocode gagal, coba CapacitorHttp:", fetchErr);
+
+    if (!isPwaMode) {
+      try {
+        const { CapacitorHttp } = await import("@capacitor/core");
+        // ✅ url sudah terbaca di sini karena deklarasi di luar
+        const response = await CapacitorHttp.get({ url });
+        return response.data?.display_name ?? "Lokasi tidak ditemukan";
+      } catch (capErr) {
+        console.error("CapacitorHttp juga gagal:", capErr);
+        throw new Error("Gagal mendapatkan nama lokasi");
+      }
+    }
+
+    throw fetchErr;
   }
 };
 
@@ -666,6 +676,7 @@ const fetchUserPrepAbsen = async () => {
       headers: { Authorization: `Bearer ${token}` },
     });
     const d = response.data.data;
+    
     phone.value = d.phone;
     nik.value = d.nik;
     description.value = d.description;
@@ -674,6 +685,7 @@ const fetchUserPrepAbsen = async () => {
     baseLocation_lat.value = d.base_location_lat;
     baseLocation_long.value = d.base_location_long;
     statusUser_base.value = d.is_mobile;
+    statusUser_office_hour.value = d.is_office_hour;
     start_time.value = d.start_time;
   } catch (error) {
     console.error("Gagal ambil data user:", error);
@@ -681,9 +693,9 @@ const fetchUserPrepAbsen = async () => {
   }
 };
 
-// ── Lock absen jika terlambat > 1 jam dari start_time (is_mobile == 0) ──
+// ── Lock absen jika terlambat > 1 jam dari start_time (is_office_hour == 0) ──
 const isAbsenLocked = computed(() => {
-  if (statusUser_base.value != 0) return false; // is_mobile == 1 → bypass, tidak dikunci
+  if (statusUser_office_hour.value != 0) return false; // is_office_hour == 1 → bypass, tidak dikunci
 
   if (!start_time.value) return false;
 
