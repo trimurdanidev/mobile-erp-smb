@@ -1,6 +1,5 @@
 <template>
   <ion-page>
-    <!-- Header -->
     <ion-header class="scan-app-header" :translucent="false">
       <ion-toolbar class="scan-toolbar">
         <ion-buttons slot="start">
@@ -26,13 +25,12 @@
               style="color: #ea580c; background: #fff7ed"
             ></ion-icon>
             <span class="scan-section-title">Barcode Packing</span>
-            <span class="engine-badge" v-if="isScanning">
+            <span class="engine-badge" v-if="isScanning && scanEngine">
               {{ scanEngine }}
             </span>
           </div>
 
           <div class="camera-box" :class="{ 'camera-active': isScanning }">
-            <!-- Video HANYA tampil saat scanning, cegah icon play default Android -->
             <video
               ref="videoRef"
               class="camera-video"
@@ -41,7 +39,6 @@
               playsinline
               muted
             ></video>
-            <canvas ref="canvasRef" class="canvas-hidden"></canvas>
 
             <!-- Scan overlay -->
             <div class="scan-overlay" v-if="isScanning">
@@ -52,7 +49,7 @@
               <div class="scan-corner br"></div>
             </div>
 
-            <!-- Placeholder modern (hanya tampil saat tidak scanning) -->
+            <!-- Placeholder -->
             <div class="camera-placeholder" v-if="!isScanning">
               <div class="barcode-pulse-ring"></div>
               <div class="barcode-circle">
@@ -205,7 +202,7 @@ import {
   closeCircleOutline,
   checkmarkOutline,
   listOutline,
-  barcodeOutline
+  barcodeOutline,
 } from "ionicons/icons";
 import { ref, onUnmounted } from "vue";
 import api from "@/services/api";
@@ -216,25 +213,59 @@ import { playBeep } from "@/services/audioService";
 const packingNo = ref("");
 const loading = ref(false);
 const isScanning = ref(false);
-const isProcessing = ref(false); // ← cegah double hit
+const isProcessing = ref(false);
+const isMounted = ref(true);
 const videoRef = ref<HTMLVideoElement | null>(null);
 const lastResult = ref<any>(null);
 const scanHistory = ref<any[]>([]);
-const canvasRef = ref<HTMLCanvasElement | null>(null);
 const scanEngine = ref("");
 
 const userData = JSON.parse(localStorage.getItem("master_user") || "{}");
 const scannedBy = userData.user || "unknown";
 
-// ── Scanner ────────────────────────────────────────
+// ── Scanner internals ──────────────────────────────
 let stream: MediaStream | null = null;
-let scanInterval: any = null;
+let scanInterval: ReturnType<typeof setInterval> | null = null;
 let zxingReader: any = null;
 
-const isBarcodeDetectorSupported = (): boolean => {
-  return typeof (window as any).BarcodeDetector !== "undefined";
+// ── ROI Canvas (off-screen, tidak di-mount ke DOM) ──
+// Crop area tengah frame sebelum di-decode → decoder tidak perlu
+// proses seluruh gambar, hemat CPU ~50-60%.
+let roiCanvas: HTMLCanvasElement | null = null;
+let roiCtx: CanvasRenderingContext2D | null = null;
+const ROI_W_RATIO = 0.7; // 70% lebar frame (sesuai area kotak scan overlay)
+const ROI_H_RATIO = 0.5; // 50% tinggi frame
+
+const initRoiCanvas = (videoW: number, videoH: number) => {
+  roiCanvas = document.createElement("canvas");
+  roiCanvas.width = Math.floor(videoW * ROI_W_RATIO);
+  roiCanvas.height = Math.floor(videoH * ROI_H_RATIO);
+  roiCtx = roiCanvas.getContext("2d", { willReadFrequently: true })!;
 };
 
+const cropRoi = (video: HTMLVideoElement): HTMLCanvasElement | null => {
+  if (!roiCanvas || !roiCtx) return null;
+  const vw = video.videoWidth;
+  const vh = video.videoHeight;
+  if (!vw || !vh) return null;
+  // Ambil area tengah video sesuai ukuran ROI canvas
+  const srcX = Math.floor((vw - roiCanvas.width) / 2);
+  const srcY = Math.floor((vh - roiCanvas.height) / 2);
+  roiCtx.drawImage(
+    video,
+    srcX,
+    srcY,
+    roiCanvas.width,
+    roiCanvas.height,
+    0,
+    0,
+    roiCanvas.width,
+    roiCanvas.height
+  );
+  return roiCanvas;
+};
+
+// ── Buka kamera ────────────────────────────────────
 const openCamera = async (): Promise<boolean> => {
   if (!navigator.mediaDevices?.getUserMedia) {
     await showToast(
@@ -244,17 +275,26 @@ const openCamera = async (): Promise<boolean> => {
     return false;
   }
 
-  // Coba kamera belakang (environment) dengan exact, fallback tanpa exact
+  // ── Resolusi diturunkan ke 640×480 (VGA) ──
+  // Makin kecil frame → makin banyak frame/detik yang bisa di-decode.
+  // Untuk barcode 1D (Code128/Code39) resolusi ini sudah lebih dari cukup.
   const constraints: MediaStreamConstraints[] = [
     {
       video: {
         facingMode: { exact: "environment" },
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
+        width: { ideal: 640 },
+        height: { ideal: 480 },
+      },
+    },
+    {
+      video: {
+        facingMode: "environment",
+        width: { ideal: 640 },
+        height: { ideal: 480 },
       },
     },
     { video: { facingMode: "environment" } },
-    { video: true }, // last resort — any camera
+    { video: true },
   ];
 
   for (const constraint of constraints) {
@@ -276,24 +316,23 @@ const openCamera = async (): Promise<boolean> => {
 
   if (videoRef.value) {
     videoRef.value.srcObject = stream;
-    // iOS Safari kadang perlu dipaksa play setelah srcObject di-set
     try {
       await videoRef.value.play();
     } catch (playErr) {
-      console.warn(
-        "Video play error (aman di-ignore di beberapa device):",
-        playErr
-      );
+      // Aman di-ignore di beberapa device — autoplay policy
+      console.warn("Video play warning (aman):", playErr);
     }
   }
 
   return true;
 };
 
-const startNativeScanner = async () => {
+// ── Engine 1: Native BarcodeDetector (Android/Chrome) ──
+const startNativeScanner = () => {
   scanEngine.value = "Native";
 
   const detector = new (window as any).BarcodeDetector({
+    // Tambah ITF — format umum di barcode packing/warehouse
     formats: [
       "code_128",
       "code_39",
@@ -301,19 +340,34 @@ const startNativeScanner = async () => {
       "ean_8",
       "qr_code",
       "data_matrix",
+      "itf",
     ],
   });
 
+  // ── Interval 80ms (≈12 fps decode) vs 500ms sebelumnya ──
+  // → deteksi ~6x lebih cepat. Guard isProcessing tetap ada
+  // supaya tidak double-submit saat API sedang diproses.
   scanInterval = setInterval(async () => {
-    if (!videoRef.value || videoRef.value.readyState < 2) return;
-    if (isProcessing.value) return;
+    const video = videoRef.value;
+    if (!video || video.readyState < 2) return;
+    if (isProcessing.value || !isMounted.value) return;
+
     try {
-      const barcodes = await detector.detect(videoRef.value);
+      // Init ROI canvas sekali saat ukuran video sudah diketahui
+      if (!roiCanvas && video.videoWidth > 0) {
+        initRoiCanvas(video.videoWidth, video.videoHeight);
+      }
+
+      // Decode hanya area ROI (bukan full frame) → hemat CPU ~50-60%
+      const source = roiCanvas ? cropRoi(video) ?? video : video;
+      const barcodes = await detector.detect(source);
+
       if (barcodes.length > 0) {
-        await submitResiAuto(barcodes[0].rawValue);
+        // Langsung callback — tidak perlu tunggu animasi scan line
+        await submitPackingAuto(barcodes[0].rawValue);
       }
     } catch (_) {}
-  }, 500);
+  }, 80); // ← 80ms
 };
 
 // ── Engine 2: ZXing (iOS Safari, Firefox, dll) ────
@@ -321,11 +375,9 @@ const startZXingScanner = async () => {
   scanEngine.value = "ZXing";
 
   try {
-    // Dynamic import — hanya load kalau dibutuhkan
     const ZXingBrowser = await import("@zxing/browser");
     const ZXingLibrary = await import("@zxing/library");
 
-    // Hints: aktifkan semua format barcode 1D + 2D yang relevan
     const hints = new Map();
     hints.set(ZXingLibrary.DecodeHintType.POSSIBLE_FORMATS, [
       ZXingLibrary.BarcodeFormat.CODE_128,
@@ -336,21 +388,23 @@ const startZXingScanner = async () => {
       ZXingLibrary.BarcodeFormat.DATA_MATRIX,
       ZXingLibrary.BarcodeFormat.ITF,
     ]);
+    // TRY_HARDER: ZXing mencoba lebih keras untuk barcode miring/buram/kecil
+    hints.set(ZXingLibrary.DecodeHintType.TRY_HARDER, true);
 
     zxingReader = new ZXingBrowser.BrowserMultiFormatReader(hints, {
-      delayBetweenScanAttempts: 300,
+      delayBetweenScanAttempts: 80, // ← turun dari 300ms ke 80ms
     });
 
-    // Decode terus-menerus dari video element
-    zxingReader.decodeFromVideoElement(
-      videoRef.value,
-      async (result: any, err: any) => {
-        if (result && !isProcessing.value) {
-          await submitResiAuto(result.getText());
+    if (videoRef.value && stream) {
+      await zxingReader.decodeFromStream(
+        stream,
+        videoRef.value,
+        async (result: any, err: any) => {
+          if (!result || isProcessing.value || !isMounted.value) return;
+          await submitPackingAuto(result.getText());
         }
-        // err di sini normal (NotFoundException tiap frame kosong) — abaikan
-      }
-    );
+      );
+    }
   } catch (importErr) {
     console.error("Gagal load ZXing:", importErr);
     await showToast(
@@ -360,62 +414,75 @@ const startZXingScanner = async () => {
   }
 };
 
-const toggleScan = async () => {
-  if (isScanning.value) {
-    stopScan();
-  } else {
-    await startScan();
-  }
-};
-
+// ── Start / Stop / Toggle ──────────────────────────
 const startScan = async () => {
   const cameraOk = await openCamera();
   if (!cameraOk) return;
 
   isScanning.value = true;
 
-  if (isBarcodeDetectorSupported()) {
-    await startNativeScanner();
+  if (typeof (window as any).BarcodeDetector !== "undefined") {
+    startNativeScanner();
   } else {
-    // Fallback ZXing untuk iOS Safari / Firefox
     await startZXingScanner();
   }
 };
 
-const stopScan = () => {
-  // Hentikan interval native
+const stopScan = async () => {
+  // Stop interval (Native)
   if (scanInterval) {
     clearInterval(scanInterval);
     scanInterval = null;
   }
 
-  // Hentikan ZXing decoder
+  // Stop ZXing reader
   if (zxingReader) {
     try {
       zxingReader.reset();
-    } catch (_) {}
+    } catch (e) {
+      console.warn("ZXing reset error:", e);
+    }
     zxingReader = null;
   }
 
-  // Matikan stream kamera
+  // Stop semua track kamera
   if (stream) {
-    stream.getTracks().forEach((t) => t.stop());
+    stream.getTracks().forEach((track) => {
+      track.stop();
+      track.enabled = false;
+    });
     stream = null;
   }
 
+  // Reset video element
   if (videoRef.value) {
+    videoRef.value.pause();
     videoRef.value.srcObject = null;
+    videoRef.value.load();
   }
 
+  // Bersihkan ROI canvas dari memory
+  roiCanvas = null;
+  roiCtx = null;
+
   isScanning.value = false;
+  isProcessing.value = false;
   scanEngine.value = "";
 };
 
-onUnmounted(() => stopScan());
+const toggleScan = async () => {
+  if (isScanning.value) await stopScan();
+  else await startScan();
+};
+
+onUnmounted(async () => {
+  isMounted.value = false;
+  await stopScan();
+});
 
 // ── Submit Auto dari Scanner ───────────────────────
 const submitPackingAuto = async (scanned: string) => {
-  if (!scanned.trim() || isProcessing.value) return;
+  if (!scanned.trim() || isProcessing.value || !isMounted.value) return;
 
   isProcessing.value = true;
   lastResult.value = null;
@@ -436,6 +503,7 @@ const submitPackingAuto = async (scanned: string) => {
       }),
     };
 
+    if (!isMounted.value) return;
     lastResult.value = result;
     scanHistory.value.unshift(result);
     if (scanHistory.value.length > 10) scanHistory.value.pop();
@@ -443,7 +511,8 @@ const submitPackingAuto = async (scanned: string) => {
     playBeep("success");
     await showToast("✅ " + result.message, "success");
   } catch (err: any) {
-    playBeep("error"); // ❌
+    if (!isMounted.value) return;
+    playBeep("error");
     const msg = err.response?.data?.message || "Gagal scan packing";
     const result = {
       success: false,
@@ -454,16 +523,13 @@ const submitPackingAuto = async (scanned: string) => {
         minute: "2-digit",
       }),
     };
-
     lastResult.value = result;
     scanHistory.value.unshift(result);
     if (scanHistory.value.length > 10) scanHistory.value.pop();
-
     await showToast("❌ " + msg, "danger");
   } finally {
-    // ← Unlock setelah 2 detik, siap scan berikutnya
     setTimeout(() => {
-      isProcessing.value = false;
+      if (isMounted.value) isProcessing.value = false;
     }, 2000);
   }
 };
@@ -498,9 +564,8 @@ const submitPacking = async () => {
     lastResult.value = result;
     scanHistory.value.unshift(result);
     if (scanHistory.value.length > 10) scanHistory.value.pop();
-
     await showToast("✅ " + result.message, "success");
-    packingNo.value = ""; // ← clear input
+    packingNo.value = "";
   } catch (err: any) {
     playBeep("error");
     const msg = err.response?.data?.message || "Gagal scan packing";
@@ -513,11 +578,9 @@ const submitPacking = async () => {
         minute: "2-digit",
       }),
     };
-
     lastResult.value = result;
     scanHistory.value.unshift(result);
     if (scanHistory.value.length > 10) scanHistory.value.pop();
-
     await showToast("❌ " + msg, "danger");
   } finally {
     loading.value = false;
@@ -601,6 +664,18 @@ ion-content {
   color: #334155;
 }
 
+.engine-badge {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 20px;
+  background: #fff7ed;
+  color: #ea580c;
+  border: 1px solid #fed7aa;
+  letter-spacing: 0.3px;
+}
+
 .camera-box {
   position: relative;
   width: 100%;
@@ -613,14 +688,90 @@ ion-content {
   height: 100%;
   object-fit: cover;
 }
-.placeholder-icon {
-  font-size: 48px;
-  color: #334155;
+.video-hidden {
+  display: none !important;
 }
-.camera-placeholder p {
+
+.camera-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  background: linear-gradient(160deg, #0f172a 0%, #1e293b 60%, #1e3a8a22 100%);
+  overflow: hidden;
+}
+.camera-placeholder::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.06) 1px,
+    transparent 1px
+  );
+  background-size: 20px 20px;
+  pointer-events: none;
+}
+.barcode-pulse-ring {
+  position: absolute;
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  border: 2px solid rgba(37, 99, 235, 0.35);
+  animation: barcodePulse 2.4s ease-out infinite;
+}
+@keyframes barcodePulse {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.8;
+  }
+  70% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(0.85);
+    opacity: 0;
+  }
+}
+.barcode-circle {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1d4ed8, #2563eb);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 8px rgba(37, 99, 235, 0.15),
+    0 8px 24px rgba(37, 99, 235, 0.4);
+  z-index: 1;
+  margin-bottom: 14px;
+}
+.placeholder-icon {
+  font-size: 34px;
+  color: #fff;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.3));
+}
+.cam-placeholder-text {
   font-size: 13px;
-  color: #64748b;
-  margin: 0;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.75);
+  margin: 0 0 10px;
+  z-index: 1;
+}
+.cam-hint-badge {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(37, 99, 235, 0.9);
+  background: rgba(37, 99, 235, 0.15);
+  border: 1px solid rgba(37, 99, 235, 0.3);
+  padding: 4px 12px;
+  border-radius: 20px;
+  z-index: 1;
+  letter-spacing: 0.2px;
 }
 
 .scan-overlay {
@@ -694,12 +845,12 @@ ion-content {
   color: #1e293b;
   outline: none;
   font-family: inherit;
+  box-sizing: border-box;
 }
 .resi-input:focus {
   border-color: #ea580c;
 }
 
-/* History */
 .history-card {
   background: #fff;
   border-radius: 20px;
@@ -825,6 +976,9 @@ ion-content {
   opacity: 0.6;
   cursor: not-allowed;
 }
+.submit-loading {
+  opacity: 0.75;
+}
 .btn-icon {
   font-size: 18px;
 }
@@ -832,89 +986,5 @@ ion-content {
   --color: #fff;
   width: 18px;
   height: 18px;
-}
-.video-hidden {
-  display: none !important;
-}
-
-/* ─── Camera Placeholder (Modern) ──────────────── */
-.camera-placeholder {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0;
-  background: linear-gradient(160deg, #0f172a 0%, #1e293b 60%, #1e3a8a22 100%);
-  overflow: hidden;
-}
-
-/* Dot grid background texture */
-.camera-placeholder::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image: radial-gradient(circle, rgba(255,255,255,0.06) 1px, transparent 1px);
-  background-size: 20px 20px;
-  pointer-events: none;
-}
-
-/* Animated pulse ring */
-.barcode-pulse-ring {
-  position: absolute;
-  width: 110px;
-  height: 110px;
-  border-radius: 50%;
-  border: 2px solid rgba(37, 99, 235, 0.35);
-  animation: barcodePulse 2.4s ease-out infinite;
-}
-
-@keyframes barcodePulse {
-  0%   { transform: scale(0.85); opacity: 0.8; }
-  70%  { transform: scale(1.6);  opacity: 0; }
-  100% { transform: scale(0.85); opacity: 0; }
-}
-
-/* Icon circle */
-.barcode-circle {
-  width: 76px;
-  height: 76px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #1d4ed8, #2563eb);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow:
-    0 0 0 8px rgba(37, 99, 235, 0.15),
-    0 8px 24px rgba(37, 99, 235, 0.4);
-  z-index: 1;
-  margin-bottom: 14px;
-}
-
-.placeholder-icon {
-  font-size: 34px;
-  color: #ffffff;
-  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.3));
-}
-
-.cam-placeholder-text {
-  font-size: 13px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.75);
-  margin: 0 0 10px;
-  z-index: 1;
-}
-
-.cam-hint-badge {
-  font-size: 11px;
-  font-weight: 500;
-  color: rgba(37, 99, 235, 0.9);
-  background: rgba(37, 99, 235, 0.15);
-  border: 1px solid rgba(37, 99, 235, 0.3);
-  padding: 4px 12px;
-  border-radius: 20px;
-  z-index: 1;
-  letter-spacing: 0.2px;
 }
 </style>

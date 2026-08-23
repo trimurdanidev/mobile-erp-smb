@@ -12,9 +12,8 @@
       </ion-refresher>
 
       <div class="home-wrapper">
-        <!-- ── Menu Utama ──────────────────────────── -->
+        <!-- ── Menu Utama ── -->
         <div class="action-grid">
-          <!-- Absen Masuk -->
           <button
             class="action-card"
             @click="goTo('in')"
@@ -77,10 +76,7 @@
             @click="goTo('history-scan')"
             aria-label="Riwayat Scan Resi"
           >
-            <div
-              class="action-icon-wrap"
-              style="background: #e0f2fe; color: #0284c7"
-            >
+            <div class="action-icon-wrap history-icon-bg">
               <ion-icon :icon="timeOutline"></ion-icon>
             </div>
             <span class="action-title">Riwayat Scan</span>
@@ -97,7 +93,6 @@
             <span class="action-title">Laporan</span>
           </button>
 
-          <!-- ERP SMB Web -->
           <button
             class="action-card action-card-wide"
             @click="openErpWeb"
@@ -106,63 +101,214 @@
             <div class="action-icon-wrap erp-icon-bg">
               <ion-icon :icon="globeOutline"></ion-icon>
             </div>
-            <span class="action-title">ERP SMB Web</span>
-            <span class="action-sub">Buka di browser</span>
+            <div class="erp-text">
+              <span class="action-title erp-title">ERP SMB Web</span>
+              <span class="erp-sub">Buka di browser</span>
+            </div>
           </button>
         </div>
 
-        <!-- ── Ranking Section ────────────────────── -->
-        <div class="ranking-card">
-          <div class="ranking-header">
-            <div class="ranking-title-row">
-              <ion-icon :icon="starOutline" class="star-icon"></ion-icon>
-              <span class="ranking-title">Ranking Absensi</span>
-            </div>
-            <span class="ranking-period">{{ tamBulan }} {{ tahun }}</span>
-          </div>
+        <!-- ── Dual Dashboard Cards ── -->
+        <div class="dual-section">
+          <!-- Floating arrow kiri -->
+          <button
+            v-if="activeSlide === 1"
+            class="carousel-arrow carousel-arrow-left"
+            @click="goToSlide(0)"
+            aria-label="Sebelumnya"
+          >
+            <ion-icon :icon="chevronBackOutline"></ion-icon>
+          </button>
 
-          <!-- Empty State -->
-          <div v-if="dataArray.length === 0" class="empty-state">
-            <ion-icon :icon="peopleOutline" class="empty-icon"></ion-icon>
-            <p>Belum ada data ranking</p>
-          </div>
+          <!-- Floating arrow kanan -->
+          <button
+            v-if="activeSlide === 0"
+            class="carousel-arrow carousel-arrow-right"
+            @click="goToSlide(1)"
+            aria-label="Berikutnya"
+          >
+            <ion-icon :icon="chevronForwardOutline"></ion-icon>
+          </button>
 
-          <!-- Table -->
-          <div v-else class="table-wrapper">
-            <div class="table-head">
-              <span class="col-no">#</span>
-              <span class="col-name">Nama</span>
-              <span class="col-avg">Avg Absen</span>
-              <span class="col-dept">Bagian</span>
+          <!-- Track carousel -->
+          <div
+            class="dual-scroll"
+            ref="carouselRef"
+            @touchstart="onTouchStart"
+            @touchmove="onTouchMove"
+            @touchend="onTouchEnd"
+          >
+            <!-- Card Ranking Absensi -->
+            <div class="dash-card">
+              <div class="dash-card-header">
+                <div class="dash-header-left">
+                  <div class="dash-icon star-bg">
+                    <ion-icon :icon="starOutline"></ion-icon>
+                  </div>
+                  <div class="dash-header-text">
+                    <span class="dash-card-title">Ranking Absensi</span>
+                    <span class="dash-card-sub"
+                      >{{ tamBulan }} {{ tahun }}</span
+                    >
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="dataArray.length === 0" class="dash-empty">
+                <ion-icon
+                  :icon="peopleOutline"
+                  class="dash-empty-icon"
+                ></ion-icon>
+                <p>Belum ada data ranking</p>
+              </div>
+
+              <div v-else class="rank-table-wrap">
+                <div class="rank-head">
+                  <span class="rh-no">#</span>
+                  <span class="rh-name">Nama</span>
+                  <span class="rh-avg">Avg Masuk</span>
+                </div>
+                <div class="rank-scroll">
+                  <div
+                    v-for="(item, index) in dataArray.slice(0, 10)"
+                    :key="index"
+                    class="rank-row"
+                    :class="{ 'rank-top3': index < 3 }"
+                  >
+                    <span class="rh-no">
+                      <span v-if="index === 0" class="medal medal-gold">1</span>
+                      <span v-else-if="index === 1" class="medal medal-silver"
+                        >2</span
+                      >
+                      <span v-else-if="index === 2" class="medal medal-bronze"
+                        >3</span
+                      >
+                      <span v-else class="rank-plain">{{ index + 1 }}</span>
+                    </span>
+                    <div class="rh-name name-col">
+                      <span class="name-main">{{ item.namaKaryawan }}</span>
+                      <span class="name-dept">{{ item.bagian }}</span>
+                    </div>
+                    <span class="rh-avg">
+                      <span class="avg-badge">{{ item.rataJamMasuk }}</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div class="table-scroll">
-              <div
-                v-for="(item, index) in dataArray"
-                :key="index"
-                class="table-row"
-                :class="{ 'top-three': index < 3 }"
-              >
-                <span class="col-no">
-                  <span v-if="index === 0" class="medal medal-gold">1</span>
-                  <span v-else-if="index === 1" class="medal medal-silver"
-                    >2</span
-                  >
-                  <span v-else-if="index === 2" class="medal medal-bronze"
-                    >3</span
-                  >
-                  <span v-else class="rank-num">{{ index + 1 }}</span>
-                </span>
-                <span class="col-name">{{ item.namaKaryawan }}</span>
-                <span class="col-avg">
-                  <span class="avg-badge">{{ item.rataJamMasuk }}</span>
-                </span>
-                <span class="col-dept">{{ item.bagian }}</span>
+
+            <!-- Card Stok Aktual -->
+            <div class="dash-card">
+              <div class="dash-card-header">
+                <div class="dash-header-left">
+                  <div class="dash-icon stock-bg">
+                    <ion-icon :icon="cubeOutline"></ion-icon>
+                  </div>
+                  <div class="dash-header-text">
+                    <span class="dash-card-title">Stok Aktual</span>
+                    <span class="dash-card-sub" v-if="!stockLoading"
+                      >{{ stockAll.length }} produk</span
+                    >
+                  </div>
+                </div>
+                <button class="btn-lihat-semua" @click="goTo('stok-detail')">
+                  Lihat Semua
+                  <ion-icon :icon="chevronForwardOutline"></ion-icon>
+                </button>
+              </div>
+
+              <!-- Mini search -->
+              <div class="stok-search-wrap">
+                <ion-icon
+                  :icon="searchOutline"
+                  class="stok-search-icon"
+                ></ion-icon>
+                <input
+                  v-model="stockSearch"
+                  type="text"
+                  class="stok-search-input"
+                  placeholder="Cari produk..."
+                  @input="onStockSearch"
+                />
+                <button
+                  v-if="stockSearch"
+                  class="stok-search-clear"
+                  @click="clearStockSearch"
+                >
+                  <ion-icon :icon="closeCircleOutline"></ion-icon>
+                </button>
+              </div>
+
+              <!-- Skeleton -->
+              <div v-if="stockLoading" class="stok-skeleton">
+                <div v-for="n in 4" :key="n" class="skel-row">
+                  <div class="skel skel-name"></div>
+                  <div class="skel skel-qty"></div>
+                </div>
+              </div>
+
+              <!-- Empty -->
+              <div v-else-if="stockFiltered.length === 0" class="dash-empty">
+                <ion-icon
+                  :icon="searchOutline"
+                  class="dash-empty-icon"
+                ></ion-icon>
+                <p>Tidak ada produk cocok</p>
+              </div>
+
+              <!-- List -->
+              <div v-else class="stok-mini-list">
+                <div
+                  v-for="(item, idx) in stockFiltered.slice(0, 7)"
+                  :key="item.id"
+                  class="stok-row"
+                  :class="{ 'stok-row-low': item.qty_stock <= 5 }"
+                >
+                  <div class="stok-row-left">
+                    <span class="stok-no">{{ idx + 1 }}</span>
+                    <div class="stok-info">
+                      <span class="stok-name">{{ item.nm_product }}</span>
+                      <span class="stok-code">{{
+                        item.kd_product || item.kd_product_universal || "-"
+                      }}</span>
+                      <span class="stok-updated"
+                        >🕒Terakhir Update:
+                        {{ formatStokDate(item.updated_at) }}</span
+                      >
+                    </div>
+                  </div>
+                  <div class="stok-row-right">
+                    <span
+                      class="qty-badge"
+                      :class="stockQtyClass(item.qty_stock)"
+                      >{{ item.qty_stock }}</span
+                    >
+                    <span class="qty-unit">pcs</span>
+                  </div>
+                </div>
+                <button class="stok-footer-btn" @click="goTo('stok-detail')">
+                  <ion-icon :icon="arrowForwardCircleOutline"></ion-icon>
+                  Lihat semua {{ stockAll.length }} produk
+                </button>
               </div>
             </div>
           </div>
+
+          <!-- Dot indicator -->
+          <div class="carousel-dots">
+            <button
+              v-for="(_, i) in 2"
+              :key="i"
+              class="carousel-dot"
+              :class="{ 'carousel-dot-active': activeSlide === i }"
+              @click="goToSlide(i)"
+            ></button>
+          </div>
         </div>
+        <!-- end dual section -->
       </div>
-      <!-- ── Modal Sub Menu Laporan ─────────────── -->
+
+      <!-- Modal Laporan -->
       <div v-if="showLaporanModal" class="modal-overlay" @click="closeLaporan">
         <div class="modal-sheet" @click.stop>
           <div class="modal-handle"></div>
@@ -235,8 +381,12 @@ import {
   listOutline,
   personOutline,
   chevronForwardOutline,
+  chevronBackOutline,
+  searchOutline,
+  closeCircleOutline,
+  arrowForwardCircleOutline,
 } from "ionicons/icons";
-import { onMounted, ref } from "vue";
+import { onMounted, onUnmounted, ref, computed } from "vue";
 import api from "@/services/api";
 import HomeHeader from "../views/HomeHeader.vue";
 import TabsPage from "../views/TabsPage.vue";
@@ -260,6 +410,7 @@ export default {
   },
   setup() {
     const router = useRouter();
+
     const absenMasuk = ref(null);
     const userData = ref([]);
     const getUser = localStorage.getItem("master_user");
@@ -268,7 +419,6 @@ export default {
     const ff = ref(null);
     const disableButtonPulang = ref(true);
     const disableButtonMasuk = ref(false);
-    const menu = ref(null);
     const arrayRangking = ref([]);
     const dataArray = ref([]);
     const month = [
@@ -285,16 +435,8 @@ export default {
       "November",
       "Desember",
     ];
-
     const tamBulan = month[today.getMonth()];
     const tahun = today.getFullYear();
-
-    const handleRefresh = (event) => {
-      setTimeout(() => {
-        window.location.reload();
-        event.target.complete();
-      }, 1000);
-    };
 
     const parsedUser = getUser ? JSON.parse(getUser) : {};
     const deptName = (parsedUser.department_name || "").toLowerCase();
@@ -317,20 +459,142 @@ export default {
 
     const showLaporan = ["DPT005", "DPT006", "DPT007"].includes(deptCode);
 
-    // State modal sub menu laporan
+    // Modal laporan
     const showLaporanModal = ref(false);
-
     const openLaporan = () => {
       showLaporanModal.value = true;
     };
-
     const closeLaporan = () => {
       showLaporanModal.value = false;
     };
-
     const goToLaporan = (type) => {
       showLaporanModal.value = false;
       router.replace(`/${type}`);
+    };
+
+    // ── Carousel state ─────────────────────────────
+    const activeSlide = ref(0);
+    const carouselRef = ref(null);
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let autoSlideTimer = null;
+
+    const goToSlide = (idx) => {
+      activeSlide.value = idx;
+      if (carouselRef.value) {
+        const cardWidth =
+          carouselRef.value.querySelector(".dash-card")?.offsetWidth || 0;
+        const gap = 12;
+        carouselRef.value.scrollTo({
+          left: idx * (cardWidth + gap),
+          behavior: "smooth",
+        });
+      }
+      // Reset auto-slide timer setiap kali user navigasi manual
+      resetAutoSlide();
+    };
+
+    const onTouchStart = (e) => {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    };
+
+    const onTouchMove = (e) => {
+      const dx = e.touches[0].clientX - touchStartX;
+      const dy = e.touches[0].clientY - touchStartY;
+      // Hanya block scroll vertikal kalau swipe horizontal lebih dominan
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) {
+        e.preventDefault();
+      }
+    };
+
+    const onTouchEnd = (e) => {
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      const dy = e.changedTouches[0].clientY - touchStartY;
+      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
+        if (dx < 0 && activeSlide.value < 1) goToSlide(1);
+        if (dx > 0 && activeSlide.value > 0) goToSlide(0);
+      }
+    };
+
+    // Auto-slide setiap 10 detik kalau tidak ada interaksi
+    const startAutoSlide = () => {
+      autoSlideTimer = setInterval(() => {
+        goToSlide(activeSlide.value === 0 ? 1 : 0);
+      }, 10000);
+    };
+
+    const resetAutoSlide = () => {
+      if (autoSlideTimer) clearInterval(autoSlideTimer);
+      startAutoSlide();
+    };
+
+    // Stock
+    const stockAll = ref([]);
+    const stockSearch = ref("");
+    const stockLoading = ref(false);
+    let stockDebounce = null;
+
+    const stockFiltered = computed(() => {
+      const q = stockSearch.value.trim().toLowerCase();
+      if (!q) return stockAll.value;
+      return stockAll.value.filter(
+        (item) =>
+          (item.nm_product || "").toLowerCase().includes(q) ||
+          (item.kd_product_universal || "").toLowerCase().includes(q) ||
+          (item.kd_product || "").toLowerCase().includes(q)
+      );
+    });
+
+    const fetchStock = async () => {
+      stockLoading.value = true;
+      try {
+        const res = await api.get("/actual-stock");
+        if (res.data.success) stockAll.value = res.data.data;
+      } catch (err) {
+        console.error("Gagal fetch stok:", err);
+        await showToast("Gagal memuat data stok", "danger");
+      } finally {
+        stockLoading.value = false;
+      }
+    };
+
+    const onStockSearch = () => {
+      if (stockDebounce) clearTimeout(stockDebounce);
+      stockDebounce = setTimeout(() => {
+        if (stockAll.value.length === 0) fetchStock();
+      }, 300);
+    };
+
+    const clearStockSearch = () => {
+      stockSearch.value = "";
+    };
+
+    const stockQtyClass = (qty) => {
+      if (qty <= 0) return "qty-empty";
+      if (qty <= 5) return "qty-low";
+      if (qty <= 20) return "qty-medium";
+      return "qty-ok";
+    };
+
+    // Ranking
+    const getRangking = async () => {
+      try {
+        const response = await api.get(
+          "/showAbsTop/" + today.getFullYear() + "/" + (today.getMonth() + 1)
+        );
+        arrayRangking.value = response.data.data;
+        dataArray.value = arrayRangking.value.map((d) => ({
+          no: d["No"],
+          namaKaryawan: d["Nama Karyawan"],
+          bagian: d["Bagian"],
+          periode: d["Periode"],
+          rataJamMasuk: d["Rata-Rata Jam Masuk"],
+          jumlahHariMasuk: d["Jumlah Hari Masuk"],
+        }));
+      } catch (error) {
+        console.error("Gagal Mengambil Data Ranking", error.message);
+      }
     };
 
     Tanggal.value =
@@ -354,49 +618,23 @@ export default {
       }
     };
 
-    const getRangking = async () => {
-      try {
-        const response = await api.get(
-          "/showAbsTop/" + today.getFullYear() + "/" + (today.getMonth() + 1)
-        );
-        arrayRangking.value = response.data.data;
-        dataArray.value = arrayRangking.value.map((d) => ({
-          no: d["No"],
-          namaKaryawan: d["Nama Karyawan"],
-          bagian: d["Bagian"],
-          periode: d["Periode"],
-          rataJamMasuk: d["Rata-Rata Jam Masuk"],
-          jumlahHariMasuk: d["Jumlah Hari Masuk"],
-        }));
-      } catch (error) {
-        console.error("Gagal Mengambil Data", error.message);
-      }
-    };
-
-    const RefreshData = async (event) => {
+    const handleRefresh = (event) => {
       setTimeout(() => {
         window.location.reload();
-        if (event) event.target.complete();
-      }, 2000);
+        event.target.complete();
+      }, 1000);
     };
 
     const goTo = (menu) => {
       router.replace(`/${menu}`);
     };
 
-    // ── ERP SMB Web ──────────────────────────────
     const openErpWeb = async () => {
       try {
         const parsedUser = JSON.parse(getUser);
-        const username = parsedUser.user;
-        const password = parsedUser.password;
-
-        const url =
-          `https://erpsmb.cloud/index.php?model=login&action=checkLogin` +
-          `&user=${encodeURIComponent(username)}` +
-          `&password=${encodeURIComponent(password)}`;
-
-        // Gunakan Capacitor Browser agar terbuka di browser HP
+        const url = `https://erpsmb.cloud/index.php?model=login&action=checkLogin&user=${encodeURIComponent(
+          parsedUser.user
+        )}&password=${encodeURIComponent(parsedUser.password)}`;
         await Browser.open({ url, windowName: "_system" });
       } catch (error) {
         console.error("Gagal membuka ERP SMB Web:", error);
@@ -404,17 +642,31 @@ export default {
       }
     };
 
-    const refreshPage = () => {
-      router.go(0);
+    const formatStokDate = (dateStr) => {
+      if (!dateStr) return "-";
+      const d = new Date(dateStr);
+      return (
+        d.toLocaleDateString("id-ID", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        }) + " WIB"
+      );
     };
 
     onMounted(() => {
       loadAbsensi();
       checkToken();
       getRangking();
-      if (ff.value) {
-        disableButtonMasuk.value = true;
-      }
+      fetchStock();
+      if (ff.value) disableButtonMasuk.value = true;
+      startAutoSlide();
+    });
+
+    onUnmounted(() => {
+      if (autoSlideTimer) clearInterval(autoSlideTimer);
     });
 
     return {
@@ -426,12 +678,23 @@ export default {
       starOutline,
       peopleOutline,
       globeOutline,
+      calendarOutline,
+      barcodeOutline,
+      cubeOutline,
+      timeOutline,
+      barChartOutline,
+      listOutline,
+      personOutline,
+      chevronForwardOutline,
+      chevronBackOutline,
+      searchOutline,
+      closeCircleOutline,
+      arrowForwardCircleOutline,
       userData,
       TabsPage,
       Tanggal,
       disableButtonPulang,
       disableButtonMasuk,
-      RefreshData,
       IonRefresher,
       IonRefresherContent,
       handleRefresh,
@@ -441,44 +704,47 @@ export default {
       dataArray,
       tamBulan,
       tahun,
-      calendarOutline,
       showScanResi,
       showScanPacking,
-      barcodeOutline,
-      cubeOutline,
-      timeOutline,
       showLaporan,
       showLaporanModal,
       openLaporan,
       closeLaporan,
       goToLaporan,
-      barChartOutline,
-      listOutline,
-      personOutline,
-      chevronForwardOutline,
+      stockAll,
+      stockSearch,
+      stockFiltered,
+      stockLoading,
+      onStockSearch,
+      clearStockSearch,
+      stockQtyClass,
+      formatStokDate,
+      // Carousel
+      activeSlide,
+      carouselRef,
+      goToSlide,
+      onTouchStart,
+      onTouchMove,
+      onTouchEnd,
     };
   },
 };
 </script>
 
 <style scoped>
-/* ─── Base ─────────────────────────────────────── */
+/* ─── Base ── */
 ion-page {
   --background: #f0f4f8;
   --ion-background-color: #f0f4f8;
   background: #f0f4f8 !important;
 }
-
 .app-header {
   --background: #1e3a8a;
-  --ion-background-color: #1e3a8a;
   background: #1e3a8a !important;
   box-shadow: none !important;
   border: none !important;
 }
-.app-header::after {
-  display: none !important;
-}
+.app-header::after,
 .app-header::before {
   display: none !important;
 }
@@ -486,66 +752,55 @@ ion-page {
 ion-content {
   --background: #f0f4f8;
   --ion-background-color: #f0f4f8;
-  --padding-top: 0px;
-  --offset-top: 0px;
 }
-
-/* Paksa semua area di dalam ion-page jadi abu muda */
 ion-content::part(scroll) {
   background: #f0f4f8;
 }
 
-/* ─── Wrapper ───────────────────────────────────── */
+/* ─── Wrapper ── */
 .home-wrapper {
-  padding: 20px 16px 32px;
+  padding: 16px 16px 24px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
   background: #f0f4f8;
-  min-height: 100%;
 }
 
-/* ─── Action Grid ───────────────────────────────── */
+/* ─── Action Grid ── */
 .action-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
-
-/* Card normal (2 kolom) */
 .action-card {
   background: #ffffff;
   border: none;
-  border-radius: 20px;
-  padding: 20px 12px 16px;
+  border-radius: 18px;
+  padding: 14px 10px 12px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 7px;
   cursor: pointer;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
   -webkit-tap-highlight-color: transparent;
 }
-
 .action-card:active {
   transform: scale(0.96);
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
 }
 
-/* ERP Web — full width (span 2 kolom) */
 .action-card-wide {
   grid-column: 1 / -1;
   flex-direction: row;
   justify-content: flex-start;
-  gap: 16px;
-  padding: 18px 20px;
+  gap: 12px;
+  padding: 14px 16px;
   background: linear-gradient(135deg, #0f2460 0%, #1e3a8a 50%, #2563eb 100%);
   position: relative;
   overflow: hidden;
 }
-
-/* Shimmer effect di belakang ERP card */
 .action-card-wide::before {
   content: "";
   position: absolute;
@@ -556,7 +811,6 @@ ion-content::part(scroll) {
   background: rgba(255, 255, 255, 0.07);
   border-radius: 50%;
 }
-
 .action-card-wide::after {
   content: "";
   position: absolute;
@@ -567,218 +821,324 @@ ion-content::part(scroll) {
   background: rgba(255, 255, 255, 0.05);
   border-radius: 50%;
 }
-
-.action-card-wide .action-icon-wrap {
-  background: rgba(255, 255, 255, 0.15) !important;
-  flex-shrink: 0;
+.erp-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 1;
 }
-
-.action-card-wide .action-icon-wrap ion-icon {
-  color: #ffffff;
+.erp-title {
+  color: #fff !important;
+  font-size: 14px !important;
+  font-weight: 800 !important;
+  text-align: left !important;
 }
-
-.action-card-wide .action-title {
-  color: #ffffff;
-  font-size: 15px;
-  font-weight: 800;
-  text-align: left;
-}
-
-.action-card-wide .action-sub {
+.erp-sub {
   color: rgba(255, 255, 255, 0.65);
   font-size: 11px;
   font-weight: 500;
-  text-align: left;
-  margin-top: -4px;
 }
 
-/* Teks block untuk wide card */
-.action-card-wide > div:not(.action-icon-wrap) {
-  display: flex;
-  flex-direction: column;
-}
-
-/* ─── Icon Wraps ────────────────────────────────── */
 .action-icon-wrap {
-  width: 60px;
-  height: 60px;
-  border-radius: 18px;
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
 }
-
 .action-icon-wrap ion-icon {
-  font-size: 28px;
+  font-size: 22px;
   color: #fff;
 }
 
-.absen-icon-bg {
-  background: linear-gradient(135deg, #4a90e2, #2563eb);
-}
-
-.rekap-icon-bg {
-  background: linear-gradient(135deg, #6c757d, #495057);
-}
-
-.erp-icon-bg {
-  background: rgba(255, 255, 255, 0.15);
-  border: 1.5px solid rgba(255, 255, 255, 0.25);
+.action-card-wide .action-icon-wrap {
+  background: rgba(255, 255, 255, 0.15) !important;
 }
 
 .action-title {
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
   color: #334155;
   text-align: center;
   line-height: 1.3;
 }
 
-.action-sub {
-  display: none; /* hanya tampil di wide card via override di atas */
+.absen-icon-bg {
+  background: linear-gradient(135deg, #4a90e2, #2563eb);
+}
+.rekap-icon-bg {
+  background: linear-gradient(135deg, #6c757d, #495057);
+}
+.jadwal-icon-bg {
+  background: linear-gradient(135deg, #10b981, #059669);
+}
+.resi-icon-bg {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+.packing-icon-bg {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+}
+.history-icon-bg {
+  background: linear-gradient(135deg, #0891b2, #0e7490);
+}
+.laporan-icon-bg {
+  background: linear-gradient(135deg, #0891b2, #0e7490);
+}
+.erp-icon-bg {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1.5px solid rgba(255, 255, 255, 0.25);
 }
 
-/* ─── Ranking Card ──────────────────────────────── */
-.ranking-card {
+/* ══════════════════════════════════════
+   DUAL CARDS SECTION
+══════════════════════════════════════ */
+.dual-section {
+  width: 100%;
+  position: relative; /* anchor untuk floating arrows */
+}
+
+.dual-scroll {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 4px 2px 8px;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  /* Sembunyikan scrollbar — navigasi via arrow/swipe */
+  scrollbar-width: none;
+}
+.dual-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── Floating Arrow Buttons ── */
+.carousel-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(
+    -60%
+  ); /* sedikit ke atas dari tengah supaya tidak nutup konten */
+  z-index: 10;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: #ffffff;
+  color: #2563eb;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.18);
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s, transform 0.15s;
+}
+.carousel-arrow:active {
+  background: #eff6ff;
+  transform: translateY(-60%) scale(0.93);
+}
+.carousel-arrow-left {
+  left: -10px;
+}
+.carousel-arrow-right {
+  right: -10px;
+}
+
+/* ── Dot indicator ── */
+.carousel-dots {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+.carousel-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: none;
+  background: #cbd5e1;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.25s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.carousel-dot-active {
+  width: 20px;
+  border-radius: 4px;
+  background: #2563eb;
+}
+
+/* ── Individual Card ── */
+.dash-card {
+  flex-shrink: 0;
+  width: 82vw;
+  max-width: 320px;
+  min-width: 260px;
   background: #ffffff;
   border-radius: 20px;
   overflow: hidden;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
 }
 
-.ranking-header {
+/* ── Card Header ── */
+.dash-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 18px 12px;
+  padding: 14px 14px 10px;
   border-bottom: 1px solid #f1f5f9;
+  flex-shrink: 0;
 }
-
-.ranking-title-row {
+.dash-header-left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
-
-.star-icon {
+.dash-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.dash-icon ion-icon {
   font-size: 18px;
-  color: #f59e0b;
+  color: #fff;
+}
+.star-bg {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+.stock-bg {
+  background: linear-gradient(135deg, #0891b2, #0e7490);
 }
 
-.ranking-title {
-  font-size: 15px;
+.dash-header-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.dash-card-title {
+  font-size: 14px;
   font-weight: 700;
   color: #1e293b;
 }
+.dash-card-sub {
+  font-size: 11px;
+  color: #94a3b8;
+}
 
-.ranking-period {
-  font-size: 12px;
-  font-weight: 600;
-  color: #2563eb;
+/* Lihat Semua */
+.btn-lihat-semua {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 5px 10px;
+  border: 1.5px solid #2563eb;
+  border-radius: 8px;
   background: #eff6ff;
-  padding: 4px 10px;
-  border-radius: 20px;
-}
-
-/* ─── Table ─────────────────────────────────────── */
-.table-wrapper {
-  padding: 0 0 8px;
-}
-
-.table-head {
-  display: grid;
-  grid-template-columns: 36px 1fr 90px 80px;
-  padding: 10px 18px;
-  background: #f8fafc;
+  color: #2563eb;
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.8px;
-  text-transform: uppercase;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.btn-lihat-semua ion-icon {
+  font-size: 13px;
+}
+.btn-lihat-semua:active {
+  background: #dbeafe;
+}
+
+/* ── Empty ── */
+.dash-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 28px 16px;
+  gap: 6px;
+  flex: 1;
+}
+.dash-empty-icon {
+  font-size: 32px;
+  color: #cbd5e1;
+}
+.dash-empty p {
+  font-size: 12px;
   color: #94a3b8;
-  border-bottom: 1px solid #f1f5f9;
+  margin: 0;
 }
 
-.table-scroll {
-  max-height: 300px;
-  overflow-y: auto;
+/* ── Ranking Table ── */
+.rank-table-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
-.table-scroll::-webkit-scrollbar {
-  width: 4px;
-}
-.table-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-.table-scroll::-webkit-scrollbar-thumb {
-  background: #e2e8f0;
-  border-radius: 4px;
-}
-
-.table-row {
+.rank-head {
   display: grid;
-  grid-template-columns: 36px 1fr 90px 80px;
-  padding: 12px 18px;
+  grid-template-columns: 28px 1fr 68px;
+  padding: 8px 12px;
+  background: #f8fafc;
+  font-size: 10px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid #f1f5f9;
+  flex-shrink: 0;
+}
+.rank-scroll {
+  overflow-y: auto;
+  max-height: 240px;
+  -webkit-overflow-scrolling: touch;
+}
+.rank-scroll::-webkit-scrollbar {
+  width: 3px;
+}
+.rank-scroll::-webkit-scrollbar-thumb {
+  background: #e2e8f0;
+  border-radius: 3px;
+}
+
+.rank-row {
+  display: grid;
+  grid-template-columns: 28px 1fr 68px;
+  padding: 9px 12px;
   align-items: center;
   border-bottom: 1px solid #f8fafc;
-  transition: background 0.15s ease;
 }
-.table-row:last-child {
+.rank-row:last-child {
   border-bottom: none;
 }
-.table-row:hover {
-  background: #f8fafc;
+.rank-top3 {
+  background: #fafbff;
 }
 
-.col-no {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-}
-
-.col-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: #334155;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding-right: 8px;
-}
-
-.col-avg {
-  font-size: 12px;
-  color: #64748b;
+.rh-no {
   display: flex;
   align-items: center;
 }
-
-.avg-badge {
-  background: #f0f9ff;
-  color: #0284c7;
-  font-weight: 600;
-  font-size: 11px;
-  padding: 3px 8px;
-  border-radius: 8px;
-  white-space: nowrap;
-}
-
-.col-dept {
-  font-size: 12px;
-  color: #94a3b8;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* ─── Medals ────────────────────────────────────── */
 .medal {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   color: #fff;
 }
@@ -791,93 +1151,255 @@ ion-content::part(scroll) {
 .medal-bronze {
   background: linear-gradient(135deg, #c97c3a, #a0522d);
 }
-.rank-num {
-  font-size: 13px;
+.rank-plain {
+  font-size: 12px;
   font-weight: 600;
   color: #cbd5e1;
 }
 
-/* ─── Empty State ───────────────────────────────── */
-.empty-state {
+.name-col {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 36px 16px;
-  gap: 10px;
+  gap: 1px;
+  min-width: 0;
 }
-.empty-icon {
-  font-size: 40px;
-  color: #cbd5e1;
+.name-main {
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.empty-state p {
-  font-size: 13px;
+.name-dept {
+  font-size: 10px;
   color: #94a3b8;
-  margin: 0;
 }
 
-/* ─── Responsive ────────────────────────────────── */
-@media (max-width: 360px) {
-  .table-head,
-  .table-row {
-    grid-template-columns: 30px 1fr 78px 64px;
-    padding-left: 10px;
-    padding-right: 10px;
+.rh-avg {
+  display: flex;
+  justify-content: flex-end;
+}
+.avg-badge {
+  background: #f0f9ff;
+  color: #0284c7;
+  font-weight: 700;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+/* ── Stok Search ── */
+.stok-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin: 10px 12px 6px;
+  flex-shrink: 0;
+}
+.stok-search-icon {
+  position: absolute;
+  left: 10px;
+  font-size: 14px;
+  color: #94a3b8;
+  pointer-events: none;
+}
+.stok-search-input {
+  width: 100%;
+  padding: 8px 28px 8px 30px;
+  font-size: 12px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #1e293b;
+  outline: none;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+.stok-search-input:focus {
+  border-color: #2563eb;
+}
+.stok-search-input::placeholder {
+  color: #cbd5e1;
+}
+.stok-search-clear {
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 0;
+}
+
+/* ── Stok Skeleton ── */
+.stok-skeleton {
+  padding: 8px 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.skel-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.skel {
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: 6px;
+  height: 12px;
+}
+.skel-name {
+  flex: 1;
+}
+.skel-qty {
+  width: 36px;
+  flex-shrink: 0;
+}
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
   }
 }
 
-.action-card {
-  padding: 14px 10px 12px; /* ← dari 20px 12px 16px */
-  gap: 7px; /* ← dari 10px */
+/* ── Stok Mini List ── */
+.stok-mini-list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-/* Perkecil icon wrap */
-.action-icon-wrap {
-  width: 48px; /* ← dari 60px */
-  height: 48px; /* ← dari 60px */
-  border-radius: 14px; /* ← dari 18px */
+.stok-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid #f8fafc;
+}
+.stok-row:active {
+  background: #f8fafc;
+}
+.stok-row-low {
+  background: #fffbeb;
 }
 
-.action-icon-wrap ion-icon {
-  font-size: 22px; /* ← dari 28px */
+.stok-row-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+.stok-no {
+  font-size: 10px;
+  font-weight: 600;
+  color: #cbd5e1;
+  min-width: 18px;
+  text-align: right;
+  flex-shrink: 0;
+}
+.stok-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.stok-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stok-code {
+  font-size: 10px;
+  color: #94a3b8;
+  font-family: monospace;
 }
 
-/* Perkecil ERP Web card */
-.action-card-wide {
-  padding: 13px 16px; /* ← dari 18px 20px */
-  gap: 12px; /* ← dari 16px */
+.stok-row-right {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+.qty-badge {
+  font-size: 12px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 7px;
+  min-width: 32px;
+  text-align: center;
+}
+.qty-unit {
+  font-size: 9px;
+  color: #94a3b8;
 }
 
-.action-card-wide .action-title {
-  font-size: 14px; /* ← dari 15px */
+.qty-empty {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+.qty-low {
+  background: #fef3c7;
+  color: #b45309;
+}
+.qty-medium {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+.qty-ok {
+  background: #dcfce7;
+  color: #15803d;
 }
 
-.jadwal-icon-bg {
-  background: linear-gradient(135deg, #10b981, #059669);
+/* Footer btn stok */
+.stok-footer-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 11px 12px;
+  border: none;
+  border-top: 1px solid #f1f5f9;
+  background: #f8fafc;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  margin-top: auto;
+}
+.stok-footer-btn:active {
+  background: #eff6ff;
+}
+.stok-footer-btn ion-icon {
+  font-size: 15px;
 }
 </style>
 
-<!-- Override global Ionic background tanpa scoped -->
 <style>
-/* Khusus halaman ini: matikan semua background gelap Ionic */
 .ion-page,
 ion-app > .ion-page {
   --ion-background-color: #f0f4f8;
 }
 
-.resi-icon-bg {
-  background: linear-gradient(135deg, #f59e0b, #d97706);
-}
-
-.packing-icon-bg {
-  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-}
-/* ─── Laporan Icon ──────────────────────────── */
-.laporan-icon-bg {
-  background: linear-gradient(135deg, #0891b2, #0e7490);
-}
-
-/* ─── Modal Overlay ─────────────────────────── */
+/* ── Modal Laporan ── */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -886,7 +1408,6 @@ ion-app > .ion-page {
   display: flex;
   align-items: flex-end;
 }
-
 .modal-sheet {
   width: 100%;
   background: #ffffff;
@@ -897,7 +1418,6 @@ ion-app > .ion-page {
   gap: 8px;
   animation: slideUp 0.25s ease;
 }
-
 @keyframes slideUp {
   from {
     transform: translateY(100%);
@@ -906,7 +1426,6 @@ ion-app > .ion-page {
     transform: translateY(0);
   }
 }
-
 .modal-handle {
   width: 40px;
   height: 4px;
@@ -914,7 +1433,6 @@ ion-app > .ion-page {
   border-radius: 4px;
   margin: 0 auto 12px;
 }
-
 .modal-title {
   font-size: 15px;
   font-weight: 700;
@@ -934,13 +1452,11 @@ ion-app > .ion-page {
   cursor: pointer;
   width: 100%;
   text-align: left;
-  transition: background 0.15s ease;
+  transition: background 0.15s;
 }
-
 .modal-item:active {
   background: #f1f5f9;
 }
-
 .modal-icon-wrap {
   width: 46px;
   height: 46px;
@@ -950,44 +1466,36 @@ ion-app > .ion-page {
   justify-content: center;
   flex-shrink: 0;
 }
-
 .modal-icon-wrap ion-icon {
   font-size: 22px;
   color: #fff;
 }
-
 .status-icon-bg {
   background: linear-gradient(135deg, #f59e0b, #d97706);
 }
-
 .admin-icon-bg {
   background: linear-gradient(135deg, #6366f1, #4f46e5);
 }
-
 .modal-item-text {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 3px;
 }
-
 .modal-item-title {
   font-size: 14px;
   font-weight: 600;
   color: #1e293b;
 }
-
 .modal-item-sub {
   font-size: 12px;
   color: #94a3b8;
 }
-
 .modal-chevron {
   font-size: 18px;
   color: #cbd5e1;
   flex-shrink: 0;
 }
-
 .modal-cancel {
   margin-top: 6px;
   padding: 14px;
@@ -999,5 +1507,10 @@ ion-app > .ion-page {
   color: #ef4444;
   cursor: pointer;
   width: 100%;
+}
+.stok-updated {
+  font-size: 9.5px;
+  color: #b0bec5;
+  margin-top: 1px;
 }
 </style>

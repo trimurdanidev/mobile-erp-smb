@@ -62,7 +62,7 @@
           <div class="table-head">
             <div class="col-center">#</div>
             <div>Data Resi &amp; User</div>
-            <div class="col-center">Kurir</div>
+            <div class="col-center">MP &amp; Kurir</div>
             <div class="col-center">Status</div>
             <div class="col-center">Aksi</div>
           </div>
@@ -126,13 +126,26 @@
                 <div class="row-time">🕒 {{ formatDate(item.updated_at) }}</div>
               </div>
 
+              <!-- ── Kolom MP & Kurir — logo bertumpuk dalam 1 kolom ── -->
               <div class="col-courier">
-                <img
-                  :src="cleanLogoUrl(item.logo_url)"
-                  @error="handleImageError($event)"
-                  class="table-courier-logo"
-                  alt="courier logo"
-                />
+                <div class="courier-stack">
+                  <!-- Logo Marketplace — hanya muncul kalau order BUKAN Shopee asli -->
+                  <img
+                    v-if="item.marketplace_logo_url"
+                    :src="item.marketplace_logo_url"
+                    @error="handleImageError($event)"
+                    class="mp-logo"
+                    :alt="item.marketplace_name || 'marketplace'"
+                    :title="item.marketplace_name || ''"
+                  />
+                  <!-- Logo Ekspedisi/Kurir — selalu tampil -->
+                  <img
+                    :src="cleanLogoUrl(item.courier_logo_url || item.logo_url)"
+                    @error="handleImageError($event)"
+                    class="table-courier-logo"
+                    alt="courier logo"
+                  />
+                </div>
               </div>
 
               <div class="col-status">
@@ -146,7 +159,6 @@
                 </span>
               </div>
 
-              <!-- ✅ Kolom Aksi -->
               <div class="col-action">
                 <button
                   class="btn-detail"
@@ -196,7 +208,7 @@
               class="page-btn"
               :class="{ 'page-btn-active': p === meta.current_page }"
               :disabled="isLoadingHistory"
-              @click="goToPage(p)"
+              @click="goToPage(Number(p))"
             >
               {{ p }}
             </button>
@@ -212,7 +224,7 @@
         </div>
       </div>
 
-      <!-- ✅ Modal Detail Order — di dalam ion-content, state independen -->
+      <!-- ✅ Modal Detail Order -->
       <ion-modal
         :is-open="isDetailOpen"
         css-class="order-detail-modal"
@@ -253,55 +265,191 @@
 
             <!-- Data modal -->
             <template v-else-if="orderDetail">
+              <!-- ── Detail Card ── -->
               <div class="detail-card">
                 <div class="status-row">
-                  <span :class="['status-pill', statusClass(orderDetail.header.order_status)]">
+                  <span
+                    :class="[
+                      'status-pill',
+                      statusClass(orderDetail.header.order_status),
+                    ]"
+                  >
                     {{ orderDetail.header.order_status || "UNKNOWN" }}
                   </span>
-                  <span v-if="orderDetail.header.cod" class="cod-pill">COD</span>
+                  <span v-if="orderDetail.header.cod" class="cod-pill"
+                    >COD</span
+                  >
                 </div>
 
                 <div class="info-grid">
                   <div class="info-item">
                     <span class="info-label">No. Order</span>
-                    <span class="info-value">{{ orderDetail.header.order_sn || "-" }}</span>
+                    <span class="info-value">{{
+                      orderDetail.header.order_sn || "-"
+                    }}</span>
                   </div>
                   <div class="info-item">
                     <span class="info-label">No. Resi / Booking</span>
                     <span class="info-value-row">
-                      <span class="info-value">{{ orderDetail.header.booking_sn || "-" }}</span>
-                      <button v-if="orderDetail.header.booking_sn" class="copy-btn" @click="copyBookingSn">
-                        <ion-icon :icon="copied ? checkmarkOutline : copyOutline"></ion-icon>
+                      <span class="info-value">{{
+                        orderDetail.header.booking_sn || "-"
+                      }}</span>
+                      <button
+                        v-if="orderDetail.header.booking_sn"
+                        class="copy-btn"
+                        @click="copyBookingSn"
+                      >
+                        <ion-icon
+                          :icon="copied ? checkmarkOutline : copyOutline"
+                        ></ion-icon>
                       </button>
                     </span>
                   </div>
                   <div class="info-item">
                     <span class="info-label">Dibuat</span>
-                    <span class="info-value">{{ formatDateTime(orderDetail.header.order_create_time) }}</span>
+                    <span class="info-value">{{
+                      formatDateTime(orderDetail.header.order_create_time)
+                    }}</span>
                   </div>
                   <div class="info-item">
                     <span class="info-label">Batas Kirim</span>
-                    <span class="info-value info-value-deadline">{{ formatDateTime(orderDetail.header.ship_by_date) }}</span>
+                    <span class="info-value info-value-deadline">{{
+                      formatDateTime(orderDetail.header.ship_by_date)
+                    }}</span>
                   </div>
                 </div>
 
-                <div v-if="orderDetail.header.message_to_seller" class="seller-note">
+                <div
+                  v-if="orderDetail.header.message_to_seller"
+                  class="seller-note"
+                >
                   💬 {{ orderDetail.header.message_to_seller }}
                 </div>
-              </div>
 
+                <!-- ── Tombol Lihat Tracking ── -->
+                <button
+                  class="btn-tracking"
+                  @click="
+                    toggleTracking(
+                      orderDetail.header.order_sn,
+                      orderDetail.header.shop_id
+                    )
+                  "
+                  :disabled="isLoadingTracking"
+                >
+                  <ion-icon
+                    :icon="
+                      isLoadingTracking ? hourglassOutline : locationOutline
+                    "
+                  ></ion-icon>
+                  {{
+                    isLoadingTracking
+                      ? "Memuat..."
+                      : isTrackingOpen
+                      ? "Sembunyikan Tracking"
+                      : "Lihat Tracking"
+                  }}
+                </button>
+
+                <!-- ── Tracking Inline (expand di dalam card) ── -->
+                <div v-if="isTrackingOpen" class="tracking-inline">
+                  <div class="tracking-divider"></div>
+
+                  <!-- Loading tracking -->
+                  <div v-if="isLoadingTracking" class="tracking-loading">
+                    <ion-spinner name="dots" color="primary"></ion-spinner>
+                    <span>Memuat tracking...</span>
+                  </div>
+
+                  <!-- Error tracking -->
+                  <div v-else-if="trackingErrorMsg" class="tracking-error">
+                    <ion-icon
+                      :icon="alertCircleOutline"
+                      class="tracking-error-icon"
+                    ></ion-icon>
+                    <p>{{ trackingErrorMsg }}</p>
+                    <button
+                      class="retry-btn-sm"
+                      @click="
+                        fetchTracking(
+                          orderDetail.header.order_sn,
+                          orderDetail.header.shop_id
+                        )
+                      "
+                    >
+                      Coba Lagi
+                    </button>
+                  </div>
+
+                  <!-- Timeline tracking -->
+                  <div v-else-if="trackingData" class="tracking-timeline">
+                    <div class="tracking-global-status">
+                      <span
+                        :class="[
+                          'tracking-global-badge',
+                          trackingData.logistics_status
+                            .toLowerCase()
+                            .replace(/_/g, '-'),
+                        ]"
+                      >
+                        {{ trackingData.logistics_status.replace(/_/g, " ") }}
+                      </span>
+                    </div>
+
+                    <div
+                      v-for="(t, idx) in trackingData.tracking_info"
+                      :key="t.update_time"
+                      class="tracking-item"
+                    >
+                      <div class="tracking-dot-wrap">
+                        <div
+                          class="tracking-dot"
+                          :class="{ 'tracking-dot-active': idx === 0 }"
+                        ></div>
+                        <div
+                          v-if="idx < trackingData.tracking_info.length - 1"
+                          class="tracking-line"
+                        ></div>
+                      </div>
+                      <div
+                        class="tracking-content"
+                        :class="{ 'tracking-content-active': idx === 0 }"
+                      >
+                        <div class="tracking-status-label">
+                          {{ trackingStatusLabel(t.logistics_status) }}
+                        </div>
+                        <div class="tracking-desc">{{ t.description }}</div>
+                        <div class="tracking-time">
+                          🕒 {{ formatTrackingTime(t.update_time) }}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <!-- end tracking-inline -->
+              </div>
+              <!-- end detail-card -->
+
+              <!-- ── Items Section ── -->
               <div class="items-section">
                 <div class="items-section-title">
                   Produk
-                  <span class="items-count">({{ orderDetail.details.length }})</span>
+                  <span class="items-count"
+                    >({{ orderDetail.details.length }})</span
+                  >
                 </div>
 
-                <div v-for="(it, idx) in orderDetail.details" :key="it.id" class="item-card">
+                <div
+                  v-for="(it, idx) in orderDetail.details"
+                  :key="it.id"
+                  class="item-card"
+                >
                   <div class="item-index">{{ idx + 1 }}</div>
                   <div class="item-info">
                     <div class="item-name">{{ it.item_name }}</div>
-                    <div v-if="it.model_name" class="item-variant">Varian: {{ it.model_name }}</div>
-                    
+                    <div v-if="it.model_name" class="item-variant">
+                      Varian: {{ it.model_name }}
+                    </div>
                     <div class="item-price-row">
                       <span class="item-qty">{{ it.quantity }}x</span>
                       <span v-if="canViewPrice" class="item-price">
@@ -309,7 +457,6 @@
                       </span>
                     </div>
                   </div>
-                  
                   <div v-if="canViewPrice" class="item-subtotal">
                     {{ formatCurrency(itemSubtotal(it)) }}
                   </div>
@@ -322,7 +469,9 @@
           <div v-if="orderDetail" class="modal-footer">
             <div class="footer-summary">
               <span class="footer-label">Total ({{ totalQty }} barang)</span>
-              <span v-if="canViewPrice" class="footer-total">{{ formatCurrency(totalPrice) }}</span>
+              <span v-if="canViewPrice" class="footer-total">{{
+                formatCurrency(totalPrice)
+              }}</span>
             </div>
             <button class="footer-close-btn" @click="closeDetail">Tutup</button>
           </div>
@@ -357,6 +506,8 @@ import {
   copyOutline,
   checkmarkOutline,
   documentTextOutline,
+  locationOutline,
+  hourglassOutline,
 } from "ionicons/icons";
 import api from "@/services/api";
 
@@ -365,11 +516,15 @@ interface ResiHistory {
   id: number;
   resi_no: string;
   order_no: string;
+  shop_id?: string | number | null;
   resi_status: string;
   scanned_by: string;
   packing_by: string;
   updated_at: string;
   logo_url: string;
+  courier_logo_url?: string;
+  marketplace_logo_url?: string | null;
+  marketplace_name?: string | null;
 }
 
 interface Meta {
@@ -388,6 +543,7 @@ interface ResiStatus {
 
 interface OrderHeader {
   id: number;
+  shop_id: number;
   order_sn: string;
   booking_sn: string;
   order_status: string;
@@ -411,12 +567,25 @@ interface OrderDetailData {
   details: OrderItemDetail[];
 }
 
+interface TrackingItem {
+  update_time: number;
+  description: string;
+  logistics_status: string;
+  return_code: string;
+}
+
+interface TrackingData {
+  logistics_status: string;
+  order_sn: string;
+  tracking_info: TrackingItem[];
+}
+
 // ── History State ──────────────────────────────────
 const selectedStatus = ref("ALL");
 const searchQuery = ref("");
 const historyList = ref<ResiHistory[]>([]);
 const statusList = ref<ResiStatus[]>([]);
-const isLoadingHistory = ref(false); // ← khusus tabel history
+const isLoadingHistory = ref(false);
 const isLoadingMore = ref(false);
 const isLoadingStatus = ref(false);
 const tableScrollRef = ref<HTMLElement | null>(null);
@@ -432,10 +601,16 @@ const userData = ref(JSON.parse(localStorage.getItem("master_user") || "{}"));
 // ── Modal / Detail State ───────────────────────────
 const isDetailOpen = ref(false);
 const selectedOrderNo = ref<string | null>(null);
-const isLoadingDetail = ref(false); // ← khusus modal detail
+const isLoadingDetail = ref(false);
 const detailErrorMsg = ref<string | null>(null);
 const orderDetail = ref<OrderDetailData | null>(null);
 const copied = ref(false);
+
+// ── Tracking State ─────────────────────────────────
+const isTrackingOpen = ref(false);
+const isLoadingTracking = ref(false);
+const trackingData = ref<TrackingData | null>(null);
+const trackingErrorMsg = ref<string | null>(null);
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -490,7 +665,6 @@ const canViewPrice = privilegedDepts.some((d) =>
   (userData.value.department_name || "").includes(d)
 );
 
-
 // ── Fetch Detail Order ─────────────────────────────
 const fetchDetail = async (orderNo: string | null) => {
   if (!orderNo) return;
@@ -514,6 +688,40 @@ const fetchDetail = async (orderNo: string | null) => {
   }
 };
 
+// ── Fetch Tracking ─────────────────────────────────
+const fetchTracking = async (orderSn: string, shopId: number | string) => {
+  isLoadingTracking.value = true;
+  trackingErrorMsg.value = null;
+  trackingData.value = null;
+
+  try {
+    const response = await api.get(`v2/logistics/${orderSn}/tracking-info`, {
+      params: { shop_id: shopId },
+    });
+    if (response.data.success) {
+      trackingData.value = response.data.data;
+    } else {
+      trackingErrorMsg.value =
+        response.data.message || "Gagal memuat tracking.";
+    }
+  } catch (error) {
+    console.error("Gagal mengambil tracking:", error);
+    trackingErrorMsg.value = "Terjadi kesalahan. Coba lagi.";
+  } finally {
+    isLoadingTracking.value = false;
+  }
+};
+
+// ── Toggle Tracking ────────────────────────────────
+const toggleTracking = (orderSn: string, shopId: number | string) => {
+  if (isTrackingOpen.value) {
+    isTrackingOpen.value = false;
+    return;
+  }
+  isTrackingOpen.value = true;
+  fetchTracking(orderSn, shopId);
+};
+
 // ── Modal Controls ─────────────────────────────────
 const openDetail = (orderNo: string | null) => {
   if (!orderNo) return;
@@ -524,11 +732,13 @@ const openDetail = (orderNo: string | null) => {
 
 const closeDetail = () => {
   isDetailOpen.value = false;
-  // Bersihkan setelah animasi tutup selesai
   setTimeout(() => {
     selectedOrderNo.value = null;
     orderDetail.value = null;
     detailErrorMsg.value = null;
+    isTrackingOpen.value = false;
+    trackingData.value = null;
+    trackingErrorMsg.value = null;
   }, 250);
 };
 
@@ -634,6 +844,35 @@ const formatDateTime = (dateString?: string | null) => {
   );
 };
 
+const formatTrackingTime = (unix: number) => {
+  const d = new Date(unix * 1000);
+  return (
+    d.toLocaleString("id-ID", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }) + " WIB"
+  );
+};
+
+const trackingStatusLabel = (status: string) => {
+  const map: Record<string, string> = {
+    ORDER_CREATED: "Order Dibuat",
+    LOGISTICS_REQUEST_CREATED: "Permintaan Dibuat",
+    LOGISTICS_PICKUP_DONE: "Sudah Di-pickup",
+    LOGISTICS_PICKUP_FAILED: "Pickup Gagal",
+    LOGISTICS_DELIVERY_DONE: "Terkirim",
+    LOGISTICS_DELIVERY_FAILED: "Gagal Kirim",
+    LOGISTICS_RETURN_PICKUP_DONE: "Return Di-pickup",
+    LOGISTICS_RETURN_PICKUP_FAILED: "Return Pickup Gagal",
+    LOGISTICS_RETURN_DONE: "Return Selesai",
+    UNKNOW: "Update",
+  };
+  return map[status] || status.replace(/_/g, " ");
+};
+
 const formatCurrency = (value: string | number) => {
   const num = typeof value === "string" ? parseFloat(value) : value;
   if (isNaN(num)) return "Rp 0";
@@ -658,47 +897,38 @@ const statusClass = (status?: string) => {
 
 const copyBookingSn = async () => {
   if (!orderDetail.value?.header.booking_sn) return;
-
   const textToCopy = orderDetail.value.header.booking_sn;
 
-  // 💡 Cek apakah browser mendukung navigator.clipboard (Hanya aktif di HTTPS / Localhost)
   if (navigator.clipboard && window.isSecureContext) {
     try {
       await navigator.clipboard.writeText(textToCopy);
       copied.value = true;
       setTimeout(() => (copied.value = false), 1500);
-      return; // Berhasil, langsung keluar fungsi
+      return;
     } catch (error) {
-      console.error("Gagal menyalin nomor resi via Clipboard API:", error);
+      console.error("Gagal menyalin via Clipboard API:", error);
     }
   }
 
-  // 🔄 FALLBACK METHOD: Menggunakan trik Element Input (Jalan di HTTP biasa / IP Lokal)
   try {
     const textArea = document.createElement("textarea");
     textArea.value = textToCopy;
-
-    // Sembunyikan elemen agar tidak mengacaukan layout UI
     textArea.style.position = "fixed";
     textArea.style.left = "-999999px";
     textArea.style.top = "-999999px";
     document.body.appendChild(textArea);
-
     textArea.focus();
     textArea.select();
-
-    // Eksekusi perintah salin bawaan browser lama
     const successful = document.execCommand("copy");
     document.body.removeChild(textArea);
-
     if (successful) {
       copied.value = true;
       setTimeout(() => (copied.value = false), 1500);
     } else {
-      throw new Error("Perintah execCommand copy mengembalikan nilai false");
+      throw new Error("execCommand copy gagal");
     }
   } catch (fallbackError) {
-    console.error("Gagal total menyalin nomor resi:", fallbackError);
+    console.error("Gagal total menyalin:", fallbackError);
   }
 };
 
@@ -886,7 +1116,7 @@ onMounted(() => {
   min-height: 0;
 }
 
-/* ── Table head — 5 kolom ── */
+/* ── Table head ── */
 .table-head {
   display: grid;
   grid-template-columns: 35px 1fr 56px 76px 44px;
@@ -907,7 +1137,7 @@ onMounted(() => {
   overscroll-behavior: contain;
 }
 
-/* ── Rows — 5 kolom ── */
+/* ── Rows ── */
 .table-row {
   display: grid;
   grid-template-columns: 35px 1fr 56px 76px 44px;
@@ -961,11 +1191,30 @@ onMounted(() => {
   font-size: 11px;
   color: #64748b;
 }
+
+/* ── Kolom MP & Kurir (2 logo bertumpuk dalam 1 kolom) ── */
 .col-courier {
   display: flex;
   justify-content: center;
   align-items: center;
 }
+.courier-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+/* Logo marketplace — lebih kecil, di atas */
+.mp-logo {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 6px;
+  padding: 2px;
+}
+/* Logo kurir/ekspedisi — tetap seperti semula, di bawah */
 .table-courier-logo {
   width: 36px;
   height: 36px;
@@ -1202,6 +1451,8 @@ onMounted(() => {
 .retry-btn:active {
   background: #f1f5f9;
 }
+
+/* ── Detail Card ── */
 .detail-card {
   background: #ffffff;
   border: 1px solid #e2e8f0;
@@ -1311,6 +1562,182 @@ onMounted(() => {
   color: #475569;
   line-height: 1.4;
 }
+
+/* ── Tombol Tracking ── */
+.btn-tracking {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px 14px;
+  border: 1.5px solid #2563eb;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s;
+}
+.btn-tracking:active {
+  background: #dbeafe;
+}
+.btn-tracking:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.btn-tracking ion-icon {
+  font-size: 16px;
+}
+
+/* ── Tracking Inline (di dalam detail-card) ── */
+.tracking-inline {
+  margin-top: 4px;
+}
+.tracking-divider {
+  height: 1px;
+  background: #e2e8f0;
+  margin: 12px 0;
+}
+.tracking-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0 4px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+.tracking-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 0;
+  font-size: 12px;
+  color: #f87171;
+  text-align: center;
+}
+.tracking-error-icon {
+  font-size: 28px;
+  color: #f87171;
+}
+.retry-btn-sm {
+  padding: 5px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 2px;
+}
+.retry-btn-sm:active {
+  background: #f1f5f9;
+}
+
+/* ── Tracking Global Status ── */
+.tracking-global-status {
+  margin-bottom: 12px;
+}
+.tracking-global-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 5px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  background: #f1f5f9;
+  color: #64748b;
+}
+.tracking-global-badge.logistics-pickup-failed,
+.tracking-global-badge.logistics-delivery-failed,
+.tracking-global-badge.logistics-return-pickup-failed {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+.tracking-global-badge.logistics-delivery-done,
+.tracking-global-badge.logistics-return-done {
+  background: #dcfce7;
+  color: #15803d;
+}
+.tracking-global-badge.logistics-pickup-done,
+.tracking-global-badge.logistics-return-pickup-done {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+.tracking-global-badge.order-created,
+.tracking-global-badge.logistics-request-created {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+/* ── Tracking Timeline ── */
+.tracking-timeline {
+  display: flex;
+  flex-direction: column;
+}
+.tracking-item {
+  display: flex;
+  gap: 10px;
+}
+.tracking-dot-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  width: 14px;
+}
+.tracking-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #cbd5e1;
+  border: 2px solid #e2e8f0;
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.tracking-dot-active {
+  background: #2563eb;
+  border-color: #bfdbfe;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+.tracking-line {
+  width: 2px;
+  flex: 1;
+  background: #e2e8f0;
+  min-height: 16px;
+  margin-top: 3px;
+}
+.tracking-content {
+  padding-bottom: 14px;
+  flex: 1;
+  min-width: 0;
+}
+.tracking-content-active .tracking-status-label {
+  color: #2563eb;
+}
+.tracking-status-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #334155;
+  margin-bottom: 2px;
+}
+.tracking-desc {
+  font-size: 11.5px;
+  color: #475569;
+  line-height: 1.4;
+}
+.tracking-time {
+  font-size: 10.5px;
+  color: #94a3b8;
+  margin-top: 3px;
+}
+
+/* ── Items Section ── */
 .items-section-title {
   font-size: 11.5px;
   font-weight: 700;
@@ -1382,6 +1809,8 @@ onMounted(() => {
   white-space: nowrap;
   padding-top: 1px;
 }
+
+/* ── Modal Footer ── */
 .modal-footer {
   display: flex;
   align-items: center;
