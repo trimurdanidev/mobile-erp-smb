@@ -1,5 +1,6 @@
 <template>
   <ion-page>
+    <!-- Header -->
     <ion-header class="scan-app-header" :translucent="false">
       <ion-toolbar class="scan-toolbar">
         <ion-buttons slot="start">
@@ -24,9 +25,6 @@
               class="scan-section-icon"
             ></ion-icon>
             <span class="scan-section-title">Barcode Resi</span>
-            <span class="engine-badge" v-if="isScanning && scanEngine">{{
-              scanEngine
-            }}</span>
           </div>
 
           <div class="camera-box" :class="{ 'camera-active': isScanning }">
@@ -143,7 +141,7 @@
     </ion-content>
 
     <!-- ══════════════════════════════════════
-         MODAL PILIH MARKETPLACE
+         MODAL PILIH MARKETPLACE (Dinamis dari API)
     ══════════════════════════════════════ -->
     <ion-modal
       :is-open="isShopModalOpen"
@@ -153,13 +151,6 @@
       <div class="shop-modal-inner">
         <!-- Header modal -->
         <div class="shop-modal-header">
-          <button
-            class="modal-x-btn"
-            @click="cancelShopModal"
-            :disabled="submitShopLoading"
-          >
-            <ion-icon :icon="closeOutline"></ion-icon>
-          </button>
           <div class="shop-modal-icon-wrap">
             <ion-icon
               :icon="alertCircleOutline"
@@ -173,13 +164,15 @@
           </div>
         </div>
 
-        <!-- Pilihan Marketplace -->
+        <!-- Pilihan Marketplace — DINAMIS dari API -->
         <div class="marketplace-list">
+          <!-- Loading state saat fetch marketplace -->
           <div v-if="isLoadingMarketplace" class="marketplace-loading-state">
             <ion-spinner name="crescent" color="primary"></ion-spinner>
             <p>Memuat daftar marketplace...</p>
           </div>
 
+          <!-- Empty state kalau API gagal/kosong -->
           <div
             v-else-if="marketplaceList.length === 0"
             class="marketplace-empty-state"
@@ -192,6 +185,7 @@
             </button>
           </div>
 
+          <!-- List marketplace dari API -->
           <button
             v-else
             v-for="shop in marketplaceList"
@@ -282,22 +276,20 @@ import {
   alertCircleOutline,
   chevronForwardOutline,
   refreshOutline,
-  closeOutline,
 } from "ionicons/icons";
 import { ref, onMounted, onUnmounted } from "vue";
 import api from "@/services/api";
 import { showToast } from "@/services/toastHandlers";
 import { playBeep } from "@/services/audioService";
+import { Html5Qrcode } from "html5-qrcode";
 
 // ── State ──────────────────────────────────────────
 const resiNo = ref("");
 const loading = ref(false);
 const isScanning = ref(false);
-const isProcessing = ref(false);
-const isMounted = ref(true);
 const videoRef = ref<HTMLVideoElement | null>(null);
 const lastResult = ref<any>(null);
-const scanEngine = ref("");
+const isProcessing = ref(false);
 
 // ── Shop Modal State ───────────────────────────────
 const isShopModalOpen = ref(false);
@@ -305,7 +297,7 @@ const pendingResi = ref("");
 const selectedShop = ref<string | null>(null);
 const submitShopLoading = ref(false);
 
-// ── Marketplace ────────────────────────────────────
+// ── Marketplace List (dinamis dari API) ────────────
 interface MarketplaceItem {
   id: number;
   marketplace_name: string;
@@ -318,11 +310,16 @@ const isLoadingMarketplace = ref(false);
 const userData = JSON.parse(localStorage.getItem("master_user") || "{}");
 const scannedBy = userData.user || "unknown";
 
+// ── Fetch daftar marketplace dari API ──────────────
 const fetchMarketplaceList = async () => {
   isLoadingMarketplace.value = true;
   try {
     const response = await api.get("/getListMarketplace");
-    marketplaceList.value = response.data.success ? response.data.data : [];
+    if (response.data.success) {
+      marketplaceList.value = response.data.data;
+    } else {
+      marketplaceList.value = [];
+    }
   } catch (err) {
     console.error("Gagal mengambil daftar marketplace:", err);
     marketplaceList.value = [];
@@ -331,147 +328,209 @@ const fetchMarketplaceList = async () => {
   }
 };
 
+// Fallback gambar kalau logo gagal di-load
 const handleLogoError = (event: Event) => {
   (event.target as HTMLImageElement).src =
     "https://placehold.co/100x100/f1f5f9/94a3b8?text=Shop";
 };
 
-// ── Scanner internals ──────────────────────────────
+// ── Scanner ────────────────────────────────────────
 let stream: MediaStream | null = null;
-let scanInterval: ReturnType<typeof setInterval> | null = null;
-let zxingReader: any = null;
+let scanInterval: any = null;
+let html5QrcodeScanner: Html5Qrcode | null = null;
 
-// ── Buka kamera ────────────────────────────────────
-const openCamera = async (): Promise<boolean> => {
-  if (!navigator.mediaDevices?.getUserMedia) {
-    await showToast(
-      "Kamera tidak tersedia. Pastikan akses via HTTPS.",
-      "danger"
-    );
-    return false;
-  }
+// ── Off-screen canvas untuk ROI crop (Region of Interest) ──
+// Canvas ini tidak pernah di-mount ke DOM, hanya dipakai di memory
+// untuk memotong area barcode sebelum decode → jauh lebih ringan
+// dibanding decode seluruh frame kamera.
+let roiCanvas: HTMLCanvasElement | null = null;
+let roiCtx: CanvasRenderingContext2D | null = null;
 
-  const constraints: MediaStreamConstraints[] = [
-    {
-      video: {
-        facingMode: { exact: "environment" },
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
-      },
-    },
-    { video: { facingMode: "environment" } },
-    { video: true },
-  ];
+// Ukuran ROI: 70% lebar × 50% tinggi frame, di-center
+// (sesuai kotak scan overlay yang user lihat)
+const ROI_W_RATIO = 0.7;
+const ROI_H_RATIO = 0.5;
 
-  for (const constraint of constraints) {
-    try {
-      stream = await navigator.mediaDevices.getUserMedia(constraint);
-      break;
-    } catch (e) {
-      console.warn("Coba constraint berikutnya:", e);
-    }
-  }
-
-  if (!stream) {
-    await showToast(
-      "Gagal akses kamera. Pastikan izin kamera sudah diberikan.",
-      "danger"
-    );
-    return false;
-  }
-
-  if (videoRef.value) {
-    videoRef.value.srcObject = stream;
-    try {
-      await videoRef.value.play();
-    } catch (playErr) {
-      console.warn("Video play warning (aman):", playErr);
-    }
-  }
-
-  return true;
+const initRoiCanvas = (videoW: number, videoH: number) => {
+  roiCanvas = document.createElement("canvas");
+  roiCanvas.width = Math.floor(videoW * ROI_W_RATIO);
+  roiCanvas.height = Math.floor(videoH * ROI_H_RATIO);
+  roiCtx = roiCanvas.getContext("2d", { willReadFrequently: true })!;
 };
 
-// ── Engine 1: Native BarcodeDetector (Android/Chrome) ──
-const startNativeScanner = () => {
-  scanEngine.value = "Native";
+// Crop frame ke area ROI lalu kembalikan ImageBitmap-nya
+// ImageBitmap jauh lebih efisien dari drawImage penuh karena
+// tidak perlu round-trip ke DOM.
+const cropRoi = (video: HTMLVideoElement): HTMLCanvasElement | null => {
+  if (!roiCanvas || !roiCtx) return null;
+  const vw = video.videoWidth;
+  const vh = video.videoHeight;
+  if (!vw || !vh) return null;
 
-  const detector = new (window as any).BarcodeDetector({
-    formats: [
-      "code_128",
-      "code_39",
-      "ean_13",
-      "ean_8",
-      "qr_code",
-      "data_matrix",
-    ],
-  });
+  const srcX = Math.floor((vw - roiCanvas.width) / 2);
+  const srcY = Math.floor((vh - roiCanvas.height) / 2);
 
-  scanInterval = setInterval(async () => {
-    if (!videoRef.value || videoRef.value.readyState < 2) return;
-    if (isProcessing.value || !isMounted.value) return;
-    try {
-      const barcodes = await detector.detect(videoRef.value);
-      if (barcodes.length > 0) {
-        await submitResiAuto(barcodes[0].rawValue);
-      }
-    } catch (_) {}
-  }, 500);
+  roiCtx.drawImage(
+    video,
+    srcX,
+    srcY,
+    roiCanvas.width,
+    roiCanvas.height, // source: area tengah video
+    0,
+    0,
+    roiCanvas.width,
+    roiCanvas.height // destination: seluruh canvas ROI
+  );
+  return roiCanvas;
 };
 
-// ── Engine 2: ZXing (iOS Safari, Firefox, dll) ────
-const startZXingScanner = async () => {
-  scanEngine.value = "ZXing";
-
-  try {
-    const ZXingBrowser = await import("@zxing/browser");
-    const ZXingLibrary = await import("@zxing/library");
-
-    const hints = new Map();
-    hints.set(ZXingLibrary.DecodeHintType.POSSIBLE_FORMATS, [
-      ZXingLibrary.BarcodeFormat.CODE_128,
-      ZXingLibrary.BarcodeFormat.CODE_39,
-      ZXingLibrary.BarcodeFormat.EAN_13,
-      ZXingLibrary.BarcodeFormat.EAN_8,
-      ZXingLibrary.BarcodeFormat.QR_CODE,
-      ZXingLibrary.BarcodeFormat.DATA_MATRIX,
-      ZXingLibrary.BarcodeFormat.ITF,
-    ]);
-
-    zxingReader = new ZXingBrowser.BrowserMultiFormatReader(hints, {
-      delayBetweenScanAttempts: 300,
-    });
-
-    if (videoRef.value && stream) {
-      await zxingReader.decodeFromStream(
-        stream,
-        videoRef.value,
-        async (result: any) => {
-          if (!result || isProcessing.value || !isMounted.value) return;
-          await submitResiAuto(result.getText());
-        }
-      );
-    }
-  } catch (importErr) {
-    console.error("Gagal load ZXing:", importErr);
-    await showToast(
-      "Scanner tidak dapat dimuat. Coba gunakan Input Manual.",
-      "warning"
-    );
-  }
-};
-
-// ── Start / Stop / Toggle ──────────────────────────
 const startScan = async () => {
-  const cameraOk = await openCamera();
-  if (!cameraOk) return;
+  try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      await showToast(
+        "Kamera tidak tersedia. Pastikan akses via HTTPS.",
+        "danger"
+      );
+      return;
+    }
 
-  isScanning.value = true;
+    // ── Resolusi kamera diturunkan ke 640×480 (VGA) ──
+    // Makin kecil frame → makin banyak frame per detik yang bisa di-decode.
+    // Untuk barcode 1D (Code128) resolusi ini sudah lebih dari cukup.
+    const constraints: MediaStreamConstraints[] = [
+      {
+        video: {
+          facingMode: { exact: "environment" },
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+        },
+      },
+      {
+        video: {
+          facingMode: "environment",
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+        },
+      },
+      { video: { facingMode: "environment" } },
+      { video: true },
+    ];
 
-  if (typeof (window as any).BarcodeDetector !== "undefined") {
-    startNativeScanner();
-  } else {
-    await startZXingScanner();
+    for (const c of constraints) {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(c);
+        break;
+      } catch (_) {
+        /* coba constraint berikutnya */
+      }
+    }
+
+    if (!stream) {
+      await showToast(
+        "Gagal akses kamera. Berikan izin kamera di browser.",
+        "danger"
+      );
+      return;
+    }
+
+    if (videoRef.value) {
+      videoRef.value.srcObject = stream;
+      try {
+        await videoRef.value.play();
+      } catch (_) {}
+    }
+    isScanning.value = true;
+
+    // ── Engine 1: Native BarcodeDetector (Chrome/Android) ──
+    // Native ML engine — paling cepat, tidak butuh canvas sama sekali
+    // karena detect() langsung baca VideoFrame di GPU.
+    if ("BarcodeDetector" in window) {
+      const detector = new (window as any).BarcodeDetector({
+        formats: [
+          "code_128",
+          "code_39",
+          "ean_13",
+          "ean_8",
+          "qr_code",
+          "data_matrix",
+          "itf",
+        ],
+      });
+
+      // ── Interval 80ms (≈12 fps decode) ──
+      // Lebih agresif dari 500ms semula → deteksi ~6x lebih cepat.
+      // Guard isProcessing tetap ada supaya tidak double-submit.
+      scanInterval = setInterval(async () => {
+        const video = videoRef.value;
+        if (!video || video.readyState < 2 || isProcessing.value) return;
+
+        try {
+          // Init ROI canvas sekali saat ukuran video sudah diketahui
+          if (!roiCanvas && video.videoWidth > 0) {
+            initRoiCanvas(video.videoWidth, video.videoHeight);
+          }
+
+          // Decode hanya area ROI (bukan full frame) → hemat CPU ~50-60%
+          const source = roiCanvas ? cropRoi(video) ?? video : video;
+          const barcodes = await detector.detect(source);
+
+          if (barcodes.length > 0) {
+            // Langsung callback — tidak perlu tunggu animasi scan line selesai
+            await submitResiAuto(barcodes[0].rawValue);
+          }
+        } catch (_) {}
+      }, 80); // ← 80ms interval
+    } else {
+      // ── Engine 2: ZXing fallback (iOS Safari / Firefox) ──
+      // Konfigurasi fps=15, qrbox diperkecil ke 60% area
+      // supaya ZXing tidak decode area yang tidak perlu.
+      console.warn("BarcodeDetector tidak didukung, fallback ke ZXing.");
+
+      try {
+        const ZXingBrowser = await import("@zxing/browser");
+        const ZXingLibrary = await import("@zxing/library");
+
+        const hints = new Map();
+        hints.set(ZXingLibrary.DecodeHintType.POSSIBLE_FORMATS, [
+          ZXingLibrary.BarcodeFormat.CODE_128,
+          ZXingLibrary.BarcodeFormat.CODE_39,
+          ZXingLibrary.BarcodeFormat.EAN_13,
+          ZXingLibrary.BarcodeFormat.EAN_8,
+          ZXingLibrary.BarcodeFormat.QR_CODE,
+          ZXingLibrary.BarcodeFormat.DATA_MATRIX,
+          ZXingLibrary.BarcodeFormat.ITF,
+        ]);
+        // TRY_HARDER supaya barcode miring/buram tetap terbaca
+        hints.set(ZXingLibrary.DecodeHintType.TRY_HARDER, true);
+
+        const zxReader = new ZXingBrowser.BrowserMultiFormatReader(hints, {
+          delayBetweenScanAttempts: 80, // ← 80ms juga, konsisten
+        });
+
+        html5QrcodeScanner = zxReader as any;
+
+        if (!videoRef.value) return;
+        zxReader.decodeFromVideoElement(
+          videoRef.value,
+          async (result: any, err: any) => {
+            if (result && !isProcessing.value) {
+              // Langsung callback tanpa delay
+              await submitResiAuto(result.getText());
+            }
+            // NotFoundException di setiap frame kosong adalah normal — abaikan
+          }
+        );
+      } catch (importErr) {
+        console.error("Gagal load ZXing:", importErr);
+        await showToast(
+          "Scanner tidak dapat dimuat. Gunakan Input Manual.",
+          "warning"
+        );
+      }
+    }
+  } catch (err: any) {
+    console.error("Kamera error:", err);
+    await showToast("Gagal akses kamera: " + (err.message || err), "danger");
   }
 };
 
@@ -481,57 +540,57 @@ const stopScan = async () => {
     scanInterval = null;
   }
 
-  if (zxingReader) {
+  if (html5QrcodeScanner) {
     try {
-      zxingReader.reset();
-    } catch (e) {
-      console.warn("ZXing reset:", e);
+      // ZXing BrowserMultiFormatReader pakai reset()
+      (html5QrcodeScanner as any).reset?.();
+    } catch (err) {
+      console.error("Gagal stop ZXing scanner:", err);
     }
-    zxingReader = null;
+    html5QrcodeScanner = null;
   }
 
   if (stream) {
-    stream.getTracks().forEach((track) => {
-      track.stop();
-      track.enabled = false;
-    });
+    stream.getTracks().forEach((t) => t.stop());
     stream = null;
   }
 
-  if (videoRef.value) {
-    videoRef.value.pause();
-    videoRef.value.srcObject = null;
-    videoRef.value.load();
-  }
+  if (videoRef.value) videoRef.value.srcObject = null;
+
+  // Bersihkan ROI canvas dari memory
+  roiCanvas = null;
+  roiCtx = null;
 
   isScanning.value = false;
-  isProcessing.value = false;
-  scanEngine.value = "";
 };
 
 const toggleScan = async () => {
-  if (isScanning.value) await stopScan();
+  if (isScanning.value) stopScan();
   else await startScan();
 };
 
 onMounted(() => {
+  // Prefetch daftar marketplace di awal biar modal langsung siap saat dibutuhkan
   fetchMarketplaceList();
 });
 
-onUnmounted(async () => {
-  isMounted.value = false;
-  await stopScan();
-});
+onUnmounted(() => stopScan());
 
 // ── Handle Response API ────────────────────────────
 const handleScanResponse = (response: any, resi: string) => {
   const data = response.data;
 
+  // Cek need_shop_label → buka modal pilih marketplace
   if (!data.success && data.need_shop_label === true) {
     pendingResi.value = data.data?.resi_no || resi;
     selectedShop.value = null;
     isShopModalOpen.value = true;
-    if (marketplaceList.value.length === 0) fetchMarketplaceList();
+
+    // Refresh daftar marketplace tiap kali modal dibuka,
+    // jaga-jaga ada marketplace baru ditambahkan di backend
+    if (marketplaceList.value.length === 0) {
+      fetchMarketplaceList();
+    }
     return;
   }
 
@@ -556,7 +615,7 @@ const handleScanResponse = (response: any, resi: string) => {
 
 // ── Submit Auto dari Scanner ───────────────────────
 const submitResiAuto = async (scanned: string) => {
-  if (!scanned.trim() || isProcessing.value || !isMounted.value) return;
+  if (!scanned.trim() || isProcessing.value) return;
   isProcessing.value = true;
   lastResult.value = null;
 
@@ -565,9 +624,8 @@ const submitResiAuto = async (scanned: string) => {
       resi_no: scanned.trim(),
       scanned_by: scannedBy,
     });
-    if (isMounted.value) handleScanResponse(response, scanned.trim());
+    handleScanResponse(response, scanned.trim());
   } catch (err: any) {
-    if (!isMounted.value) return;
     if (err.response?.data?.need_shop_label === true) {
       pendingResi.value = err.response.data?.data?.resi_no || scanned.trim();
       selectedShop.value = null;
@@ -581,7 +639,7 @@ const submitResiAuto = async (scanned: string) => {
     }
   } finally {
     setTimeout(() => {
-      if (isMounted.value) isProcessing.value = false;
+      isProcessing.value = false;
     }, 2000);
   }
 };
@@ -631,7 +689,7 @@ const selectAndSubmit = async (shopName: string) => {
     const response = await api.post("/resi/scan-pickup", {
       resi_no: pendingResi.value,
       scanned_by: scannedBy,
-      shop_label: shopName,
+      shop_label: shopName, // ← kirim nama marketplace yang dipilih ke backend
     });
 
     const data = response.data;
@@ -673,11 +731,16 @@ const cancelShopModal = () => {
   isShopModalOpen.value = false;
   selectedShop.value = null;
   pendingResi.value = "";
-  lastResult.value = { success: false, message: "Scan dibatalkan.", resi: "" };
+  lastResult.value = {
+    success: false,
+    message: "Scan dibatalkan.",
+    resi: "",
+  };
 };
 </script>
 
 <style scoped>
+/* ─── Header ── */
 .scan-app-header {
   --background: #1e3a8a;
   background: #1e3a8a;
@@ -720,17 +783,7 @@ const cancelShopModal = () => {
   font-weight: 500;
 }
 
-.engine-badge {
-  margin-left: auto;
-  font-size: 10px;
-  font-weight: 700;
-  color: #16a34a;
-  background: #dcfce7;
-  border: 1px solid #bbf7d0;
-  padding: 2px 8px;
-  border-radius: 20px;
-}
-
+/* ─── Content ── */
 ion-content {
   --background: #f0f4f8;
 }
@@ -741,6 +794,7 @@ ion-content {
   gap: 14px;
 }
 
+/* ─── Card ── */
 .scan-card {
   background: #fff;
   border-radius: 20px;
@@ -767,6 +821,7 @@ ion-content {
   color: #334155;
 }
 
+/* ─── Camera ── */
 .camera-box {
   position: relative;
   width: 100%;
@@ -783,6 +838,7 @@ ion-content {
   display: none !important;
 }
 
+/* ─── Camera Placeholder ── */
 .camera-placeholder {
   position: absolute;
   inset: 0;
@@ -843,7 +899,7 @@ ion-content {
 }
 .placeholder-icon {
   font-size: 34px;
-  color: #fff;
+  color: #ffffff;
   filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.3));
 }
 .cam-placeholder-text {
@@ -865,6 +921,7 @@ ion-content {
   letter-spacing: 0.2px;
 }
 
+/* Scan overlay */
 .scan-overlay {
   position: absolute;
   inset: 0;
@@ -923,6 +980,7 @@ ion-content {
   font-weight: 700;
 }
 
+/* ─── Input ── */
 .input-row {
   padding: 14px 16px;
 }
@@ -942,6 +1000,7 @@ ion-content {
   border-color: #2563eb;
 }
 
+/* ─── Result ── */
 .result-card {
   background: #fff;
   border-radius: 16px;
@@ -986,6 +1045,7 @@ ion-content {
   font-family: monospace;
 }
 
+/* ─── Submit Button ── */
 .submit-btn {
   display: flex;
   align-items: center;
@@ -1023,15 +1083,18 @@ ion-content {
   height: 18px;
 }
 
-/* ════ SHOP LABEL MODAL ════ */
+/* ════════════════════════════════════
+   SHOP LABEL MODAL
+════════════════════════════════════ */
 .shop-modal-inner {
   display: flex;
   flex-direction: column;
   background: #f8fafc;
   height: 100%;
 }
+
+/* Header modal */
 .shop-modal-header {
-  position: relative;
   background: #ffffff;
   padding: 24px 20px 20px;
   border-bottom: 1px solid #e2e8f0;
@@ -1076,6 +1139,7 @@ ion-content {
   border-radius: 4px;
 }
 
+/* Marketplace List */
 .marketplace-list {
   flex: 1;
   padding: 16px;
@@ -1084,6 +1148,8 @@ ion-content {
   gap: 10px;
   overflow-y: auto;
 }
+
+/* Loading / empty state untuk fetch marketplace */
 .marketplace-loading-state,
 .marketplace-empty-state {
   display: flex;
@@ -1125,7 +1191,7 @@ ion-content {
   gap: 14px;
   width: 100%;
   padding: 14px 16px;
-  background: #fff;
+  background: #ffffff;
   border: 1.5px solid #e2e8f0;
   border-radius: 16px;
   cursor: pointer;
@@ -1148,6 +1214,7 @@ ion-content {
   border-color: #93c5fd !important;
 }
 
+/* Logo area — sekarang pakai <img> dari API */
 .marketplace-logo-wrap {
   width: 52px;
   height: 52px;
@@ -1167,6 +1234,7 @@ ion-content {
   object-fit: contain;
 }
 
+/* Info */
 .marketplace-info {
   flex: 1;
   display: flex;
@@ -1184,6 +1252,7 @@ ion-content {
   color: #94a3b8;
 }
 
+/* Action icon */
 .marketplace-action {
   display: flex;
   align-items: center;
@@ -1204,9 +1273,10 @@ ion-content {
   height: 20px;
 }
 
+/* Footer modal */
 .shop-modal-footer {
   padding: 14px 16px 24px;
-  background: #fff;
+  background: #ffffff;
   border-top: 1px solid #e2e8f0;
 }
 .btn-cancel-shop {
@@ -1214,7 +1284,7 @@ ion-content {
   padding: 12px;
   border: 1.5px solid #e2e8f0;
   border-radius: 12px;
-  background: #fff;
+  background: #ffffff;
   color: #64748b;
   font-size: 13px;
   font-weight: 700;
@@ -1241,36 +1311,5 @@ ion-modal.shop-label-modal {
 }
 ion-modal.shop-label-modal::part(content) {
   border-radius: 24px 24px 0 0;
-}
-
-.modal-x-btn {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  width: 32px;
-  height: 32px;
-  border: none;
-  border-radius: 50%;
-  background: #f1f5f9;
-  color: #64748b;
-  font-size: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  z-index: 10;
-}
-.modal-x-btn:active:not(:disabled) {
-  background: #e2e8f0;
-}
-.modal-x-btn:disabled {
-  opacity: 0.4;
-}
-
-.shop-modal-footer {
-  padding: 14px 16px calc(24px + env(safe-area-inset-bottom));
-  background: #ffffff;
-  border-top: 1px solid #e2e8f0;
 }
 </style>

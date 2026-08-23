@@ -14,6 +14,7 @@ import ScanPacking from "@/views/ScanPacking.vue";
 import HistoryScan from "@/views/ViewHistoryScan.vue";
 import LaporanStatus from "@/views/LaporanStatus.vue";
 import LaporanAdmin from "@/views/LaporanAdmin.vue";
+import StokDetailPage from "@/views/StokDetailPage.vue";
 
 const routes: Array<RouteRecordRaw> = [
   {
@@ -82,6 +83,10 @@ const routes: Array<RouteRecordRaw> = [
       {
         path: "/laporan-admin",
         component: LaporanAdmin,
+      },
+      {
+        path: "/stok-detail",
+        component: StokDetailPage,
       },
       {
         path: "/logout",
