@@ -48,64 +48,88 @@
 
         <!-- Info Card -->
         <div class="info-card" v-if="user">
-          <div class="section-label">Informasi Akun</div>
-          <div class="info-row">
-            <div class="info-icon-wrap blue-bg">
-              <ion-icon :icon="personOutline"></ion-icon>
-            </div>
-            <div class="info-content">
-              <span class="info-key">Nama Lengkap</span>
-              <span class="info-val">{{
-                geterUser?.data?.description || "Belum tersedia"
+          <button
+            class="info-toggle"
+            type="button"
+            :aria-expanded="showInfo"
+            @click="showInfo = !showInfo"
+          >
+            <span class="section-label">Informasi Akun</span>
+            <span class="info-toggle-right">
+              <span class="info-toggle-hint">{{
+                showInfo ? "Sembunyikan" : "Tampilkan"
               }}</span>
-            </div>
-          </div>
-          <div class="info-divider"></div>
-          <div class="info-row">
-            <div class="info-icon-wrap purple-bg">
-              <ion-icon :icon="cardOutline"></ion-icon>
-            </div>
-            <div class="info-content">
-              <span class="info-key">NIK</span>
-              <span class="info-val">{{
-                geterUser?.data?.nik || "Belum tersedia"
-              }}</span>
-            </div>
-          </div>
-          <div class="info-divider"></div>
-          <div class="info-row">
-            <div class="info-icon-wrap teal-bg">
-              <ion-icon :icon="atOutline"></ion-icon>
-            </div>
-            <div class="info-content">
-              <span class="info-key">Username</span>
-              <span class="info-val">{{
-                geterUser?.data?.user || "Belum tersedia"
-              }}</span>
-            </div>
-          </div>
-          <div class="info-divider"></div>
-          <div class="info-row">
-            <div class="info-icon-wrap green-bg">
-              <ion-icon :icon="phonePortraitOutline"></ion-icon>
-            </div>
-            <div class="info-content">
-              <span class="info-key">Nomor HP</span>
-              <span class="info-val">{{
-                geterUser?.data?.phone || "Belum tersedia"
-              }}</span>
-            </div>
-          </div>
-          <div class="info-divider"></div>
-          <div class="info-row">
-            <div class="info-icon-wrap orange-bg">
-              <ion-icon :icon="businessOutline"></ion-icon>
-            </div>
-            <div class="info-content">
-              <span class="info-key">Departemen</span>
-              <span class="info-val">{{
-                geterUser?.data?.department_name || "Belum tersedia"
-              }}</span>
+              <ion-icon
+                :icon="chevronDownOutline"
+                class="info-chevron"
+                :class="{ 'chevron-open': showInfo }"
+              ></ion-icon>
+            </span>
+          </button>
+          <div
+            class="info-collapse"
+            :class="{ 'info-collapse-open': showInfo }"
+          >
+            <div class="info-collapse-inner">
+              <div class="info-row">
+                <div class="info-icon-wrap blue-bg">
+                  <ion-icon :icon="personOutline"></ion-icon>
+                </div>
+                <div class="info-content">
+                  <span class="info-key">Nama Lengkap</span>
+                  <span class="info-val">{{
+                    geterUser?.data?.description || "Belum tersedia"
+                  }}</span>
+                </div>
+              </div>
+              <div class="info-divider"></div>
+              <div class="info-row">
+                <div class="info-icon-wrap purple-bg">
+                  <ion-icon :icon="cardOutline"></ion-icon>
+                </div>
+                <div class="info-content">
+                  <span class="info-key">NIK</span>
+                  <span class="info-val">{{
+                    geterUser?.data?.nik || "Belum tersedia"
+                  }}</span>
+                </div>
+              </div>
+              <div class="info-divider"></div>
+              <div class="info-row">
+                <div class="info-icon-wrap teal-bg">
+                  <ion-icon :icon="atOutline"></ion-icon>
+                </div>
+                <div class="info-content">
+                  <span class="info-key">Username</span>
+                  <span class="info-val">{{
+                    geterUser?.data?.user || "Belum tersedia"
+                  }}</span>
+                </div>
+              </div>
+              <div class="info-divider"></div>
+              <div class="info-row">
+                <div class="info-icon-wrap green-bg">
+                  <ion-icon :icon="phonePortraitOutline"></ion-icon>
+                </div>
+                <div class="info-content">
+                  <span class="info-key">Nomor HP</span>
+                  <span class="info-val">{{
+                    geterUser?.data?.phone || "Belum tersedia"
+                  }}</span>
+                </div>
+              </div>
+              <div class="info-divider"></div>
+              <div class="info-row">
+                <div class="info-icon-wrap orange-bg">
+                  <ion-icon :icon="businessOutline"></ion-icon>
+                </div>
+                <div class="info-content">
+                  <span class="info-key">Departemen</span>
+                  <span class="info-val">{{
+                    geterUser?.data?.department_name || "Belum tersedia"
+                  }}</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -375,6 +399,7 @@ import {
   checkmarkOutline,
   eye,
   eyeOff,
+  chevronDownOutline,
 } from "ionicons/icons";
 
 const user = ref(null);
@@ -390,6 +415,7 @@ const department_name = ref(null);
 let loading = null;
 const showPassword = ref(false);
 const showPasswordConf = ref(false);
+const showInfo = ref(false);
 
 const showLoading = async () => {
   loading = await loadingController.create({
@@ -421,7 +447,7 @@ const fetchUserProfile = async () => {
     description.value = geterUser.value.data.description;
     department_name.value = geterUser.value.data.department_name;
     user.value = geterUser.value.data.user;
-    showToast("✅ Data pengguna:" + geterUser.value.data.user, "success");
+    showToast((await response).data.message, "success");
   } catch (error) {
     console.error(
       "❌ Gagal mengambil data pengguna:",
@@ -593,8 +619,26 @@ ion-content {
 }
 
 /* Hero */
-.hero-section {
+/* .hero-section {
   background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
+  padding: 52px 20px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  border-radius: 0 0 32px 32px;
+  box-shadow: 0 4px 20px rgba(37, 99, 235, 0.3);
+} */
+.hero-section {
+  --overlay-a: 0.7; /* makin kecil = gambar makin kelihatan */
+  --overlay-b: 0.55;
+  background: linear-gradient(
+      135deg,
+      rgba(30, 58, 138, 0.88) 0%,
+      rgba(37, 99, 235, 0.78) 100%
+    ),
+    url("/header_bg.png") center / cover no-repeat;
+  background-color: #1e3a8a; /* fallback kalau gambar gagal dimuat */
   padding: 52px 20px 32px;
   display: flex;
   flex-direction: column;
@@ -667,12 +711,72 @@ ion-content {
 }
 
 /* Info Card */
-.info-card {
+/* .info-card {
   background: #fff;
   border-radius: 20px;
   margin: 0 16px;
   padding: 16px 16px 8px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
+} */
+
+/* Info card: toggle */
+.info-card {
+  padding: 8px 16px; /* dari 16px 16px 8px */
+}
+.info-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.info-toggle .section-label {
+  padding: 0;
+}
+.info-toggle-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.info-toggle-hint {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+.info-chevron {
+  font-size: 18px;
+  color: #2563eb;
+  background: #eff6ff;
+  border-radius: 8px;
+  padding: 4px;
+  transition: transform 0.3s ease;
+}
+.chevron-open {
+  transform: rotate(180deg);
+}
+
+/* Animasi buka-tutup */
+.info-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.3s ease;
+}
+.info-collapse-open {
+  grid-template-rows: 1fr;
+}
+.info-collapse-inner {
+  overflow: hidden;
+  min-height: 0;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.info-collapse-open .info-collapse-inner {
+  opacity: 1;
 }
 .info-row {
   display: flex;

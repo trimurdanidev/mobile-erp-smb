@@ -76,7 +76,7 @@
           </ion-button>
         </div>
 
-        <!-- Input manual -->
+        <!-- Input manual / HID scanner -->
         <div class="scan-card">
           <div class="scan-card-header">
             <ion-icon
@@ -84,38 +84,116 @@
               class="scan-section-icon"
               style="color: #7c3aed; background: #f5f3ff"
             ></ion-icon>
-            <span class="scan-section-title">Input Manual</span>
+            <span class="scan-section-title">Input Manual / Scanner</span>
+            <span class="hid-status" :class="{ 'hid-on': inputFocused }">
+              <i class="hid-dot"></i>
+              {{ inputFocused ? "Scanner siap" : "Tap untuk aktif" }}
+            </span>
           </div>
           <div class="input-row">
             <input
+              ref="resiInputRef"
               v-model="resiNo"
               type="text"
               class="resi-input"
-              placeholder="Masukkan nomor resi..."
-              @keyup.enter="submitResi"
+              :placeholder="
+                useSoftKeyboard
+                  ? 'Masukkan nomor resi...'
+                  : 'Scan barcode / ketik resi...'
+              "
+              :inputmode="useSoftKeyboard ? 'text' : 'none'"
+              autocomplete="off"
+              autocapitalize="off"
+              autocorrect="off"
+              spellcheck="false"
+              enterkeyhint="done"
+              @keydown.enter.prevent="submitResi"
+              @focus="inputFocused = true"
+              @blur="onInputBlur"
             />
+            <button
+              class="kb-btn"
+              :class="{ 'kb-btn-active': useSoftKeyboard }"
+              type="button"
+              title="Tampilkan keyboard layar"
+              @click="toggleKeyboard"
+            >
+              <ion-icon :icon="keypadOutline"></ion-icon>
+            </button>
           </div>
         </div>
 
-        <!-- Result -->
-        <div class="result-card" v-if="lastResult">
-          <div
-            class="result-icon-wrap"
-            :class="lastResult.success ? 'result-ok' : 'result-err'"
-          >
+        <!-- Riwayat scan (list + counter) -->
+        <div class="scan-card">
+          <div class="scan-card-header">
             <ion-icon
-              :icon="
-                lastResult.success ? checkmarkCircleOutline : closeCircleOutline
-              "
+              :icon="listOutline"
+              class="scan-section-icon"
+              style="color: #16a34a; background: #f0fdf4"
             ></ion-icon>
+            <span class="scan-section-title">Hasil Scan</span>
+            <span class="scan-section-sub">Hari ini · {{ scannedBy }}</span>
+            <button
+              v-if="scanList.length"
+              class="clear-btn"
+              type="button"
+              @click="clearList"
+            >
+              <ion-icon :icon="trashOutline"></ion-icon>
+              Bersihkan
+            </button>
           </div>
-          <div class="result-text">
-            <div class="result-title">
-              {{ lastResult.success ? "Berhasil!" : "Gagal" }}
+
+          <!-- Counter -->
+          <div class="stat-row">
+            <div class="stat-box stat-total">
+              <span class="stat-num">{{ scanList.length }}</span>
+              <span class="stat-label">Total</span>
             </div>
-            <div class="result-msg">{{ lastResult.message }}</div>
-            <div class="result-resi" v-if="lastResult.resi">
-              Resi: {{ lastResult.resi }}
+            <div class="stat-box stat-ok">
+              <span class="stat-num">{{ successCount }}</span>
+              <span class="stat-label">Berhasil</span>
+            </div>
+            <div class="stat-box stat-err">
+              <span class="stat-num">{{ errorCount }}</span>
+              <span class="stat-label">Gagal</span>
+            </div>
+          </div>
+
+          <!-- List scrollable -->
+          <div ref="listRef" class="result-list">
+            <div v-if="!scanList.length" class="result-empty">
+              Belum ada resi yang di-scan.<br />Arahkan scanner ke barcode resi.
+            </div>
+
+            <div
+              v-for="(item, idx) in scanList"
+              :key="item.id"
+              class="result-item"
+              :class="'ri-' + item.status"
+            >
+              <div class="ri-num">{{ scanList.length - idx }}</div>
+              <div class="ri-icon">
+                <ion-spinner
+                  v-if="item.status === 'pending'"
+                  name="crescent"
+                  class="ri-spinner"
+                ></ion-spinner>
+                <ion-icon
+                  v-else-if="item.status === 'success'"
+                  :icon="checkmarkCircleOutline"
+                ></ion-icon>
+                <ion-icon
+                  v-else-if="item.status === 'need_label'"
+                  :icon="alertCircleOutline"
+                ></ion-icon>
+                <ion-icon v-else :icon="closeCircleOutline"></ion-icon>
+              </div>
+              <div class="ri-body">
+                <div class="ri-resi">{{ item.resi }}</div>
+                <div class="ri-msg">{{ item.message }}</div>
+                <div class="ri-sub">{{ item.time }} · {{ item.source }}</div>
+              </div>
             </div>
           </div>
         </div>
@@ -123,19 +201,12 @@
         <!-- Submit button -->
         <button
           class="submit-btn"
-          :class="{ 'submit-loading': loading }"
-          :disabled="loading || !resiNo"
+          type="button"
+          :disabled="!resiNo.trim()"
           @click="submitResi"
         >
-          <ion-spinner
-            v-if="loading"
-            name="crescent"
-            class="btn-spinner"
-          ></ion-spinner>
-          <template v-else>
-            <ion-icon :icon="checkmarkOutline" class="btn-icon"></ion-icon>
-            Konfirmasi Pickup
-          </template>
+          <ion-icon :icon="checkmarkOutline" class="btn-icon"></ion-icon>
+          Konfirmasi Pickup
         </button>
       </div>
     </ion-content>
@@ -161,6 +232,9 @@
           <div class="shop-modal-subtitle">
             Resi <span class="resi-highlight">{{ pendingResi }}</span> tidak ada
             di Shopee. Pilih marketplace untuk melanjutkan pickup:
+          </div>
+          <div v-if="shopQueue.length > 1" class="shop-queue-note">
+            +{{ shopQueue.length - 1 }} resi lain menunggu
           </div>
         </div>
 
@@ -263,6 +337,8 @@ import {
   IonIcon,
   IonSpinner,
   IonModal,
+  onIonViewDidEnter,
+  onIonViewWillLeave,
 } from "@ionic/vue";
 import {
   arrowBackOutline,
@@ -276,28 +352,185 @@ import {
   alertCircleOutline,
   chevronForwardOutline,
   refreshOutline,
+  keypadOutline,
+  listOutline,
+  trashOutline,
 } from "ionicons/icons";
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue";
 import api from "@/services/api";
 import { showToast } from "@/services/toastHandlers";
 import { playBeep } from "@/services/audioService";
 import { Html5Qrcode } from "html5-qrcode";
 
-// ── State ──────────────────────────────────────────
+// ══════════════════════════════════════════════════
+// STATE UTAMA
+// ══════════════════════════════════════════════════
 const resiNo = ref("");
-const loading = ref(false);
 const isScanning = ref(false);
 const videoRef = ref<HTMLVideoElement | null>(null);
-const lastResult = ref<any>(null);
-const isProcessing = ref(false);
 
-// ── Shop Modal State ───────────────────────────────
-const isShopModalOpen = ref(false);
-const pendingResi = ref("");
-const selectedShop = ref<string | null>(null);
-const submitShopLoading = ref(false);
+const userData = JSON.parse(localStorage.getItem("master_user") || "{}");
+const scannedBy = userData.user || "unknown";
 
-// ── Marketplace List (dinamis dari API) ────────────
+// ══════════════════════════════════════════════════
+// RIWAYAT SCAN (list + counter)
+// ══════════════════════════════════════════════════
+type ScanStatus = "pending" | "success" | "error" | "need_label";
+type ScanSource = "HID" | "Kamera" | "Manual";
+
+interface ScanItem {
+  id: number;
+  resi: string;
+  status: ScanStatus;
+  message: string;
+  time: string;
+  source: ScanSource;
+}
+
+// ── Persist riwayat ke storage ─────────────────────
+// Key = scan_resi_history:<id user>:<shift>
+// Default: 1 "shift" = 1 hari. Mau per shift jam kerja (pagi/siang/malam)?
+// Cukup ubah getShiftKey() di bawah.
+// Pakai localStorage supaya tetap ada walau app ditutup (sessionStorage
+// hilang begitu tab/webview ditutup). Mau sessionStorage? Ganti jadi:
+//   const historyStore: Storage = sessionStorage;
+const historyStore: Storage = localStorage;
+const HISTORY_PREFIX = "scan_resi_history:";
+const HISTORY_MAX = 500; // batas item yang disimpan
+
+const getShiftKey = () => {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  // Contoh kalau mau per shift:
+  //   const h = d.getHours();
+  //   const shift = h >= 6 && h < 14 ? "pagi" : h >= 14 && h < 22 ? "siang" : "malam";
+  //   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${shift}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
+const buildHistoryKey = () =>
+  `${HISTORY_PREFIX}${userData.id ?? scannedBy}:${getShiftKey()}`;
+
+let activeKey = buildHistoryKey();
+
+const loadHistory = (): ScanItem[] => {
+  try {
+    // Bersihkan riwayat shift/hari sebelumnya (punya semua user di device ini)
+    const suffix = `:${getShiftKey()}`;
+    Object.keys(historyStore)
+      .filter((k) => k.startsWith(HISTORY_PREFIX) && !k.endsWith(suffix))
+      .forEach((k) => historyStore.removeItem(k));
+
+    const raw = historyStore.getItem(activeKey);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+
+    // Item yang belum selesai saat halaman ditinggal statusnya nggak pasti
+    // → tandai gagal, user tinggal scan ulang untuk cek status di server.
+    return parsed.map((i: ScanItem) => {
+      if (i.status === "pending") {
+        return {
+          ...i,
+          status: "error" as ScanStatus,
+          message: "Terputus saat pindah halaman — scan ulang untuk cek status",
+        };
+      }
+      if (i.status === "need_label") {
+        return {
+          ...i,
+          status: "error" as ScanStatus,
+          message: "Marketplace belum dipilih — scan ulang",
+        };
+      }
+      return i;
+    });
+  } catch (err) {
+    console.warn("Gagal membaca riwayat scan:", err);
+    return [];
+  }
+};
+
+let saveTimer: any = null;
+const saveHistory = () => {
+  try {
+    if (scanList.value.length === 0) {
+      historyStore.removeItem(activeKey);
+    } else {
+      historyStore.setItem(
+        activeKey,
+        JSON.stringify(scanList.value.slice(0, HISTORY_MAX))
+      );
+    }
+  } catch (err) {
+    console.warn("Gagal menyimpan riwayat scan:", err);
+  }
+};
+const flushHistory = () => {
+  clearTimeout(saveTimer);
+  saveHistory();
+};
+
+const scanList = ref<ScanItem[]>(loadHistory()); // index 0 = scan terbaru
+const listRef = ref<HTMLElement | null>(null);
+let scanSeq = scanList.value.reduce((max, i) => Math.max(max, i.id), 0);
+
+// Simpan otomatis setiap ada perubahan (debounce 200ms)
+watch(
+  scanList,
+  () => {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveHistory, 200);
+  },
+  { deep: true }
+);
+
+// Kalau app dibiarkan terbuka lewat pergantian hari/shift → mulai list baru
+const reloadIfShiftChanged = () => {
+  const key = buildHistoryKey();
+  if (key === activeKey) return;
+  flushHistory();
+  activeKey = key;
+  scanList.value = loadHistory();
+  scanSeq = scanList.value.reduce((max, i) => Math.max(max, i.id), 0);
+};
+
+const successCount = computed(
+  () => scanList.value.filter((i) => i.status === "success").length
+);
+const errorCount = computed(
+  () => scanList.value.filter((i) => i.status === "error").length
+);
+
+const updateItem = (id: number, patch: Partial<ScanItem>) => {
+  const item = scanList.value.find((i) => i.id === id);
+  if (item) Object.assign(item, patch);
+};
+
+const nowTime = () =>
+  new Date().toLocaleTimeString("id-ID", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+
+const scrollListToTop = () =>
+  nextTick(() => {
+    if (listRef.value) listRef.value.scrollTop = 0;
+  });
+
+const clearList = () => {
+  if (!window.confirm("Bersihkan semua riwayat scan hari ini?")) return;
+  // Item yang masih diproses / nunggu pilih marketplace jangan dihapus
+  scanList.value = scanList.value.filter(
+    (i) => i.status === "pending" || i.status === "need_label"
+  );
+  focusInput();
+};
+
+// ══════════════════════════════════════════════════
+// MARKETPLACE LIST (dinamis dari API)
+// ══════════════════════════════════════════════════
 interface MarketplaceItem {
   id: number;
   marketplace_name: string;
@@ -307,19 +540,11 @@ interface MarketplaceItem {
 const marketplaceList = ref<MarketplaceItem[]>([]);
 const isLoadingMarketplace = ref(false);
 
-const userData = JSON.parse(localStorage.getItem("master_user") || "{}");
-const scannedBy = userData.user || "unknown";
-
-// ── Fetch daftar marketplace dari API ──────────────
 const fetchMarketplaceList = async () => {
   isLoadingMarketplace.value = true;
   try {
     const response = await api.get("/getListMarketplace");
-    if (response.data.success) {
-      marketplaceList.value = response.data.data;
-    } else {
-      marketplaceList.value = [];
-    }
+    marketplaceList.value = response.data.success ? response.data.data : [];
   } catch (err) {
     console.error("Gagal mengambil daftar marketplace:", err);
     marketplaceList.value = [];
@@ -328,26 +553,248 @@ const fetchMarketplaceList = async () => {
   }
 };
 
-// Fallback gambar kalau logo gagal di-load
 const handleLogoError = (event: Event) => {
   (event.target as HTMLImageElement).src =
     "https://placehold.co/100x100/f1f5f9/94a3b8?text=Shop";
 };
 
-// ── Scanner ────────────────────────────────────────
+// ══════════════════════════════════════════════════
+// SHOP MODAL — pakai antrean, jadi kalau beberapa resi berturut-turut
+// butuh label marketplace, semuanya ke-handle satu per satu
+// ══════════════════════════════════════════════════
+const shopQueue = ref<number[]>([]); // berisi id item di scanList
+const selectedShop = ref<string | null>(null);
+const submitShopLoading = ref(false);
+
+const isShopModalOpen = computed(() => shopQueue.value.length > 0);
+const pendingResi = computed(() => {
+  const id = shopQueue.value[0];
+  return scanList.value.find((i) => i.id === id)?.resi ?? "";
+});
+
+const queueShopLabel = (id: number) => {
+  updateItem(id, {
+    status: "need_label",
+    message: "Tidak ada di Shopee — pilih marketplace",
+  });
+  if (!shopQueue.value.includes(id)) shopQueue.value.push(id);
+  if (marketplaceList.value.length === 0 && !isLoadingMarketplace.value) {
+    fetchMarketplaceList();
+  }
+};
+
+const selectAndSubmit = async (shopName: string) => {
+  const id = shopQueue.value[0];
+  if (id === undefined || submitShopLoading.value) return;
+
+  selectedShop.value = shopName;
+  submitShopLoading.value = true;
+  updateItem(id, { status: "pending", message: `Konfirmasi via ${shopName}...` });
+
+  try {
+    await processScan(id, shopName);
+  } finally {
+    shopQueue.value.shift(); // lanjut ke resi berikutnya (kalau ada)
+    submitShopLoading.value = false;
+    selectedShop.value = null;
+  }
+};
+
+const cancelShopModal = () => {
+  if (submitShopLoading.value) return;
+  const id = shopQueue.value.shift();
+  if (id !== undefined) {
+    updateItem(id, { status: "error", message: "Scan dibatalkan." });
+  }
+  selectedShop.value = null;
+};
+
+// Setelah modal tertutup → balikin fokus ke input supaya HID langsung siap
+watch(isShopModalOpen, (open) => {
+  if (!open) setTimeout(focusInput, 350);
+});
+
+// ══════════════════════════════════════════════════
+// CORE SCAN — dipakai HID, kamera, dan manual
+// Non-blocking: input langsung siap untuk scan berikutnya
+// tanpa nunggu response API.
+// ══════════════════════════════════════════════════
+const RECENT_WINDOW_MS: Record<ScanSource, number> = {
+  HID: 1500,
+  Manual: 1500,
+  Kamera: 3000, // kamera kebaca terus selama barcode masih di depan lensa
+};
+const recentReads = new Map<string, number>();
+
+const enqueueScan = (raw: string, source: ScanSource) => {
+  const resi = (raw || "").trim();
+  if (!resi) return;
+
+  // 1) Guard double-read (scanner kebaca 2x / kamera kebaca terus).
+  //    Timestamp di-refresh tiap kali kebaca, jadi selama barcode masih
+  //    terbaca terus-menerus, tidak akan bikin baris baru.
+  const now = Date.now();
+  const last = recentReads.get(resi);
+  recentReads.set(resi, now);
+  if (last && now - last < RECENT_WINDOW_MS[source]) return;
+
+  // 2) Cek riwayat sesi ini
+  const existing = scanList.value.find(
+    (i) => i.resi === resi && i.status !== "error"
+  );
+  if (existing) {
+    // Masih diproses / nunggu pilih marketplace → abaikan diam-diam
+    if (existing.status === "pending" || existing.status === "need_label") {
+      return;
+    }
+    // Sudah sukses di sesi ini → kasih tanda duplikat tanpa hit API
+    playBeep("error");
+    scanList.value.unshift({
+      id: ++scanSeq,
+      resi,
+      status: "error",
+      message: "Resi sudah di-scan di sesi ini",
+      time: nowTime(),
+      source,
+    });
+    scrollListToTop();
+    return;
+  }
+
+  // 3) Scan baru → tampil langsung (pending), kirim ke API di background
+  const id = ++scanSeq;
+  scanList.value.unshift({
+    id,
+    resi,
+    status: "pending",
+    message: "Memproses...",
+    time: nowTime(),
+    source,
+  });
+  scrollListToTop();
+  processScan(id);
+};
+
+const applyResponse = (id: number, data: any, fromLabel: boolean) => {
+  if (!data.success && data.need_shop_label === true && !fromLabel) {
+    queueShopLabel(id);
+    return;
+  }
+  if (data.success) {
+    updateItem(id, {
+      status: "success",
+      message: data.message || "Resi berhasil di-scan",
+    });
+    playBeep("success");
+  } else {
+    updateItem(id, {
+      status: "error",
+      message: data.message || "Gagal scan resi",
+    });
+    playBeep("error");
+  }
+};
+
+const processScan = async (id: number, shopLabel?: string) => {
+  const item = scanList.value.find((i) => i.id === id);
+  if (!item) return;
+
+  const payload: Record<string, any> = {
+    resi_no: item.resi,
+    scanned_by: scannedBy,
+  };
+  if (shopLabel) payload.shop_label = shopLabel;
+
+  try {
+    const response = await api.post("/resi/scan-pickup", payload);
+    applyResponse(id, response.data, !!shopLabel);
+  } catch (err: any) {
+    const data = err.response?.data;
+    if (data?.need_shop_label === true && !shopLabel) {
+      queueShopLabel(id);
+    } else {
+      playBeep("error");
+      updateItem(id, {
+        status: "error",
+        message: data?.message || "Gagal scan resi",
+      });
+    }
+  }
+};
+
+// ══════════════════════════════════════════════════
+// INPUT: HID BARCODE SCANNER + MANUAL
+// HID scanner = "keyboard" yang ngetik resi lalu kirim Enter.
+// Kuncinya: input SELALU fokus, Enter langsung submit, input langsung
+// dikosongkan (tanpa nunggu API) → scan berikutnya bisa langsung masuk.
+// ══════════════════════════════════════════════════
+const resiInputRef = ref<HTMLInputElement | null>(null);
+const inputFocused = ref(false);
+const useSoftKeyboard = ref(false); // false = keyboard layar disembunyikan (mode scanner)
+let isPageActive = true;
+
+const focusInput = () =>
+  nextTick(() => resiInputRef.value?.focus({ preventScroll: true }));
+
+const submitResi = () => {
+  const value = resiNo.value.trim();
+  if (!value) {
+    focusInput();
+    return;
+  }
+  resiNo.value = ""; // kosongkan dulu → siap untuk scan berikutnya
+  enqueueScan(value, useSoftKeyboard.value ? "Manual" : "HID");
+  focusInput();
+};
+
+const toggleKeyboard = () => {
+  useSoftKeyboard.value = !useSoftKeyboard.value;
+  nextTick(() => {
+    const el = resiInputRef.value;
+    if (!el) return;
+    el.blur();
+    el.focus({ preventScroll: true });
+  });
+};
+
+// Kalau fokus lepas (misal habis tap tombol lain), balikin otomatis
+const onInputBlur = () => {
+  inputFocused.value = false;
+  setTimeout(() => {
+    if (!isPageActive || isShopModalOpen.value) return;
+    const a = document.activeElement as HTMLElement | null;
+    if (a && ["INPUT", "TEXTAREA", "SELECT"].includes(a.tagName)) return;
+    resiInputRef.value?.focus({ preventScroll: true });
+  }, 150);
+};
+
+// Fallback: kalau ada karakter masuk padahal fokus lagi di tombol/elemen lain,
+// tarik fokus ke input (karakter pertama tetap masuk ke input).
+const onGlobalKeydown = (e: KeyboardEvent) => {
+  if (!isPageActive || isShopModalOpen.value) return;
+  if (e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1) return;
+  const t = e.target as HTMLElement | null;
+  if (
+    t &&
+    (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)
+  ) {
+    return;
+  }
+  resiInputRef.value?.focus({ preventScroll: true });
+};
+
+// ══════════════════════════════════════════════════
+// SCANNER KAMERA
+// ══════════════════════════════════════════════════
 let stream: MediaStream | null = null;
 let scanInterval: any = null;
 let html5QrcodeScanner: Html5Qrcode | null = null;
+let detecting = false; // cegah detect() numpuk kalau lebih lambat dari interval
 
-// ── Off-screen canvas untuk ROI crop (Region of Interest) ──
-// Canvas ini tidak pernah di-mount ke DOM, hanya dipakai di memory
-// untuk memotong area barcode sebelum decode → jauh lebih ringan
-// dibanding decode seluruh frame kamera.
+// Off-screen canvas untuk ROI crop (hanya di memory, tidak di-mount ke DOM)
 let roiCanvas: HTMLCanvasElement | null = null;
 let roiCtx: CanvasRenderingContext2D | null = null;
 
-// Ukuran ROI: 70% lebar × 50% tinggi frame, di-center
-// (sesuai kotak scan overlay yang user lihat)
 const ROI_W_RATIO = 0.7;
 const ROI_H_RATIO = 0.5;
 
@@ -358,9 +805,6 @@ const initRoiCanvas = (videoW: number, videoH: number) => {
   roiCtx = roiCanvas.getContext("2d", { willReadFrequently: true })!;
 };
 
-// Crop frame ke area ROI lalu kembalikan ImageBitmap-nya
-// ImageBitmap jauh lebih efisien dari drawImage penuh karena
-// tidak perlu round-trip ke DOM.
 const cropRoi = (video: HTMLVideoElement): HTMLCanvasElement | null => {
   if (!roiCanvas || !roiCtx) return null;
   const vw = video.videoWidth;
@@ -375,11 +819,11 @@ const cropRoi = (video: HTMLVideoElement): HTMLCanvasElement | null => {
     srcX,
     srcY,
     roiCanvas.width,
-    roiCanvas.height, // source: area tengah video
+    roiCanvas.height,
     0,
     0,
     roiCanvas.width,
-    roiCanvas.height // destination: seluruh canvas ROI
+    roiCanvas.height
   );
   return roiCanvas;
 };
@@ -394,9 +838,6 @@ const startScan = async () => {
       return;
     }
 
-    // ── Resolusi kamera diturunkan ke 640×480 (VGA) ──
-    // Makin kecil frame → makin banyak frame per detik yang bisa di-decode.
-    // Untuk barcode 1D (Code128) resolusi ini sudah lebih dari cukup.
     const constraints: MediaStreamConstraints[] = [
       {
         video: {
@@ -442,8 +883,6 @@ const startScan = async () => {
     isScanning.value = true;
 
     // ── Engine 1: Native BarcodeDetector (Chrome/Android) ──
-    // Native ML engine — paling cepat, tidak butuh canvas sama sekali
-    // karena detect() langsung baca VideoFrame di GPU.
     if ("BarcodeDetector" in window) {
       const detector = new (window as any).BarcodeDetector({
         formats: [
@@ -457,33 +896,30 @@ const startScan = async () => {
         ],
       });
 
-      // ── Interval 80ms (≈12 fps decode) ──
-      // Lebih agresif dari 500ms semula → deteksi ~6x lebih cepat.
-      // Guard isProcessing tetap ada supaya tidak double-submit.
       scanInterval = setInterval(async () => {
         const video = videoRef.value;
-        if (!video || video.readyState < 2 || isProcessing.value) return;
+        if (!video || video.readyState < 2 || detecting) return;
+        detecting = true;
 
         try {
-          // Init ROI canvas sekali saat ukuran video sudah diketahui
           if (!roiCanvas && video.videoWidth > 0) {
             initRoiCanvas(video.videoWidth, video.videoHeight);
           }
 
-          // Decode hanya area ROI (bukan full frame) → hemat CPU ~50-60%
           const source = roiCanvas ? cropRoi(video) ?? video : video;
           const barcodes = await detector.detect(source);
 
           if (barcodes.length > 0) {
-            // Langsung callback — tidak perlu tunggu animasi scan line selesai
-            await submitResiAuto(barcodes[0].rawValue);
+            // Non-blocking + sudah ada guard duplikat di enqueueScan
+            enqueueScan(barcodes[0].rawValue, "Kamera");
           }
-        } catch (_) {}
-      }, 80); // ← 80ms interval
+        } catch (_) {
+        } finally {
+          detecting = false;
+        }
+      }, 80);
     } else {
       // ── Engine 2: ZXing fallback (iOS Safari / Firefox) ──
-      // Konfigurasi fps=15, qrbox diperkecil ke 60% area
-      // supaya ZXing tidak decode area yang tidak perlu.
       console.warn("BarcodeDetector tidak didukung, fallback ke ZXing.");
 
       try {
@@ -500,11 +936,10 @@ const startScan = async () => {
           ZXingLibrary.BarcodeFormat.DATA_MATRIX,
           ZXingLibrary.BarcodeFormat.ITF,
         ]);
-        // TRY_HARDER supaya barcode miring/buram tetap terbaca
         hints.set(ZXingLibrary.DecodeHintType.TRY_HARDER, true);
 
         const zxReader = new ZXingBrowser.BrowserMultiFormatReader(hints, {
-          delayBetweenScanAttempts: 80, // ← 80ms juga, konsisten
+          delayBetweenScanAttempts: 80,
         });
 
         html5QrcodeScanner = zxReader as any;
@@ -512,12 +947,9 @@ const startScan = async () => {
         if (!videoRef.value) return;
         zxReader.decodeFromVideoElement(
           videoRef.value,
-          async (result: any, err: any) => {
-            if (result && !isProcessing.value) {
-              // Langsung callback tanpa delay
-              await submitResiAuto(result.getText());
-            }
-            // NotFoundException di setiap frame kosong adalah normal — abaikan
+          (result: any, _err: any) => {
+            if (result) enqueueScan(result.getText(), "Kamera");
+            // NotFoundException di frame kosong itu normal — abaikan
           }
         );
       } catch (importErr) {
@@ -542,7 +974,6 @@ const stopScan = async () => {
 
   if (html5QrcodeScanner) {
     try {
-      // ZXing BrowserMultiFormatReader pakai reset()
       (html5QrcodeScanner as any).reset?.();
     } catch (err) {
       console.error("Gagal stop ZXing scanner:", err);
@@ -557,186 +988,56 @@ const stopScan = async () => {
 
   if (videoRef.value) videoRef.value.srcObject = null;
 
-  // Bersihkan ROI canvas dari memory
   roiCanvas = null;
   roiCtx = null;
+  detecting = false;
 
   isScanning.value = false;
 };
 
 const toggleScan = async () => {
-  if (isScanning.value) stopScan();
+  if (isScanning.value) await stopScan();
   else await startScan();
+  focusInput();
+};
+
+// ══════════════════════════════════════════════════
+// LIFECYCLE
+// ══════════════════════════════════════════════════
+// Simpan langsung saat app masuk background / halaman disembunyikan.
+// Di Android, app bisa di-kill OS tanpa sempat unmount → tanpa ini scan
+// terakhir (yang masih nunggu debounce) bisa hilang.
+const onVisibilityChange = () => {
+  if (document.visibilityState === "hidden") flushHistory();
 };
 
 onMounted(() => {
-  // Prefetch daftar marketplace di awal biar modal langsung siap saat dibutuhkan
-  fetchMarketplaceList();
+  fetchMarketplaceList(); // prefetch supaya modal langsung siap
+  document.addEventListener("keydown", onGlobalKeydown);
+  document.addEventListener("visibilitychange", onVisibilityChange);
+  window.addEventListener("pagehide", flushHistory);
+  setTimeout(focusInput, 300);
 });
 
-onUnmounted(() => stopScan());
+onIonViewDidEnter(() => {
+  isPageActive = true;
+  reloadIfShiftChanged();
+  setTimeout(focusInput, 200);
+});
 
-// ── Handle Response API ────────────────────────────
-const handleScanResponse = (response: any, resi: string) => {
-  const data = response.data;
+onIonViewWillLeave(() => {
+  isPageActive = false;
+  flushHistory();
+  stopScan();
+});
 
-  // Cek need_shop_label → buka modal pilih marketplace
-  if (!data.success && data.need_shop_label === true) {
-    pendingResi.value = data.data?.resi_no || resi;
-    selectedShop.value = null;
-    isShopModalOpen.value = true;
-
-    // Refresh daftar marketplace tiap kali modal dibuka,
-    // jaga-jaga ada marketplace baru ditambahkan di backend
-    if (marketplaceList.value.length === 0) {
-      fetchMarketplaceList();
-    }
-    return;
-  }
-
-  if (data.success) {
-    lastResult.value = {
-      success: true,
-      message: data.message || "Resi berhasil di-scan",
-      resi,
-    };
-    playBeep("success");
-    showToast("✅ " + (data.message || "Berhasil"), "success");
-  } else {
-    lastResult.value = {
-      success: false,
-      message: data.message || "Gagal scan resi",
-      resi,
-    };
-    playBeep("error");
-    showToast("❌ " + (data.message || "Gagal"), "danger");
-  }
-};
-
-// ── Submit Auto dari Scanner ───────────────────────
-const submitResiAuto = async (scanned: string) => {
-  if (!scanned.trim() || isProcessing.value) return;
-  isProcessing.value = true;
-  lastResult.value = null;
-
-  try {
-    const response = await api.post("/resi/scan-pickup", {
-      resi_no: scanned.trim(),
-      scanned_by: scannedBy,
-    });
-    handleScanResponse(response, scanned.trim());
-  } catch (err: any) {
-    if (err.response?.data?.need_shop_label === true) {
-      pendingResi.value = err.response.data?.data?.resi_no || scanned.trim();
-      selectedShop.value = null;
-      isShopModalOpen.value = true;
-      if (marketplaceList.value.length === 0) fetchMarketplaceList();
-    } else {
-      playBeep("error");
-      const msg = err.response?.data?.message || "Gagal scan resi";
-      lastResult.value = { success: false, message: msg, resi: scanned };
-      await showToast("❌ " + msg, "danger");
-    }
-  } finally {
-    setTimeout(() => {
-      isProcessing.value = false;
-    }, 2000);
-  }
-};
-
-// ── Submit Manual ──────────────────────────────────
-const submitResi = async () => {
-  if (!resiNo.value.trim()) {
-    await showToast("Masukkan nomor resi terlebih dahulu", "warning");
-    return;
-  }
-
-  loading.value = true;
-  lastResult.value = null;
-
-  try {
-    const response = await api.post("/resi/scan-pickup", {
-      resi_no: resiNo.value.trim(),
-      scanned_by: scannedBy,
-    });
-    handleScanResponse(response, resiNo.value.trim());
-    if (response.data.success) resiNo.value = "";
-  } catch (err: any) {
-    if (err.response?.data?.need_shop_label === true) {
-      pendingResi.value =
-        err.response.data?.data?.resi_no || resiNo.value.trim();
-      selectedShop.value = null;
-      isShopModalOpen.value = true;
-      if (marketplaceList.value.length === 0) fetchMarketplaceList();
-    } else {
-      playBeep("error");
-      const msg = err.response?.data?.message || "Gagal scan resi";
-      lastResult.value = { success: false, message: msg, resi: resiNo.value };
-      await showToast("❌ " + msg, "danger");
-    }
-  } finally {
-    loading.value = false;
-  }
-};
-
-// ── Shop Modal Actions ─────────────────────────────
-const selectAndSubmit = async (shopName: string) => {
-  if (submitShopLoading.value) return;
-  selectedShop.value = shopName;
-  submitShopLoading.value = true;
-
-  try {
-    const response = await api.post("/resi/scan-pickup", {
-      resi_no: pendingResi.value,
-      scanned_by: scannedBy,
-      shop_label: shopName, // ← kirim nama marketplace yang dipilih ke backend
-    });
-
-    const data = response.data;
-    isShopModalOpen.value = false;
-
-    lastResult.value = {
-      success: data.success,
-      message: data.message || (data.success ? "Berhasil" : "Gagal"),
-      resi: pendingResi.value,
-    };
-
-    if (data.success) {
-      playBeep("success");
-      await showToast("✅ " + (data.message || "Berhasil"), "success");
-      resiNo.value = "";
-    } else {
-      playBeep("error");
-      await showToast("❌ " + (data.message || "Gagal"), "danger");
-    }
-  } catch (err: any) {
-    playBeep("error");
-    const msg = err.response?.data?.message || "Gagal konfirmasi pickup";
-    await showToast("❌ " + msg, "danger");
-    lastResult.value = {
-      success: false,
-      message: msg,
-      resi: pendingResi.value,
-    };
-    isShopModalOpen.value = false;
-  } finally {
-    submitShopLoading.value = false;
-    selectedShop.value = null;
-    pendingResi.value = "";
-  }
-};
-
-const cancelShopModal = () => {
-  if (submitShopLoading.value) return;
-  isShopModalOpen.value = false;
-  selectedShop.value = null;
-  pendingResi.value = "";
-  lastResult.value = {
-    success: false,
-    message: "Scan dibatalkan.",
-    resi: "",
-  };
-};
+onUnmounted(() => {
+  document.removeEventListener("keydown", onGlobalKeydown);
+  document.removeEventListener("visibilitychange", onVisibilityChange);
+  window.removeEventListener("pagehide", flushHistory);
+  flushHistory();
+  stopScan();
+});
 </script>
 
 <style scoped>
@@ -814,11 +1115,22 @@ ion-content {
   background: #eff6ff;
   padding: 6px;
   border-radius: 8px;
+  flex-shrink: 0;
 }
 .scan-section-title {
   font-size: 13px;
   font-weight: 700;
   color: #334155;
+}
+
+.scan-section-sub {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 /* ─── Camera ── */
@@ -983,9 +1295,13 @@ ion-content {
 /* ─── Input ── */
 .input-row {
   padding: 14px 16px;
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
 }
 .resi-input {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   padding: 12px 14px;
   font-size: 14px;
   border: 1.5px solid #e2e8f0;
@@ -999,50 +1315,213 @@ ion-content {
 .resi-input:focus {
   border-color: #2563eb;
 }
-
-/* ─── Result ── */
-.result-card {
-  background: #fff;
-  border-radius: 16px;
-  padding: 16px;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
-}
-.result-icon-wrap {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
+.kb-btn {
+  width: 46px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
-  flex-shrink: 0;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 20px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
-.result-ok {
-  background: #dcfce7;
+.kb-btn-active {
+  background: #eff6ff;
+  border-color: #2563eb;
+  color: #2563eb;
+}
+
+/* Status HID (kanan header input) */
+.hid-status {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+.hid-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #cbd5e1;
+}
+.hid-on {
   color: #16a34a;
 }
-.result-err {
-  background: #fee2e2;
+.hid-on .hid-dot {
+  background: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.2);
+}
+
+/* ─── Hasil Scan: tombol bersihkan ── */
+.clear-btn {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 9px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fef2f2;
   color: #dc2626;
-}
-.result-title {
-  font-size: 14px;
+  font-size: 11px;
   font-weight: 700;
-  color: #1e293b;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
-.result-msg {
-  font-size: 12px;
-  color: #64748b;
+
+/* ─── Counter ── */
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 12px 16px 4px;
+}
+.stat-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 4px;
+  border-radius: 12px;
+}
+.stat-num {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+.stat-label {
+  font-size: 10.5px;
+  font-weight: 600;
   margin-top: 2px;
 }
-.result-resi {
-  font-size: 11px;
+.stat-total {
+  background: #f1f5f9;
+  color: #334155;
+}
+.stat-ok {
+  background: #dcfce7;
+  color: #15803d;
+}
+.stat-err {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+/* ─── List scrollable ── */
+.result-list {
+  margin: 8px 12px 14px;
+  max-height: 260px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-right: 4px;
+}
+.result-list::-webkit-scrollbar {
+  width: 6px;
+}
+.result-list::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 6px;
+}
+.result-list::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 6px;
+}
+.result-empty {
+  padding: 22px 12px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.6;
   color: #94a3b8;
-  margin-top: 4px;
+}
+
+.result-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border-left: 4px solid transparent;
+  background: #f8fafc;
+  flex-shrink: 0;
+}
+.ri-success {
+  background: #f0fdf4;
+  border-left-color: #22c55e;
+}
+.ri-error {
+  background: #fef2f2;
+  border-left-color: #ef4444;
+}
+.ri-pending {
+  background: #eff6ff;
+  border-left-color: #3b82f6;
+}
+.ri-need_label {
+  background: #fff7ed;
+  border-left-color: #f97316;
+}
+
+.ri-num {
+  min-width: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-align: center;
+}
+.ri-icon {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+}
+.ri-success .ri-icon {
+  color: #16a34a;
+}
+.ri-error .ri-icon {
+  color: #dc2626;
+}
+.ri-need_label .ri-icon {
+  color: #ea580c;
+}
+.ri-spinner {
+  --color: #2563eb;
+  width: 18px;
+  height: 18px;
+}
+.ri-body {
+  flex: 1;
+  min-width: 0;
+}
+.ri-resi {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #1e293b;
   font-family: monospace;
+  word-break: break-all;
+}
+.ri-msg {
+  font-size: 11.5px;
+  color: #475569;
+  margin-top: 1px;
+  line-height: 1.35;
+}
+.ri-sub {
+  font-size: 10px;
+  color: #94a3b8;
+  margin-top: 2px;
 }
 
 /* ─── Submit Button ── */
@@ -1064,23 +1543,15 @@ ion-content {
   transition: transform 0.15s;
   -webkit-tap-highlight-color: transparent;
 }
-.submit-btn:active:not(.submit-loading) {
+.submit-btn:active:not(:disabled) {
   transform: scale(0.97);
 }
 .submit-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
-.submit-loading {
-  opacity: 0.75;
-}
 .btn-icon {
   font-size: 18px;
-}
-.btn-spinner {
-  --color: #fff;
-  width: 18px;
-  height: 18px;
 }
 
 /* ════════════════════════════════════
@@ -1093,7 +1564,6 @@ ion-content {
   height: 100%;
 }
 
-/* Header modal */
 .shop-modal-header {
   background: #ffffff;
   padding: 24px 20px 20px;
@@ -1130,6 +1600,15 @@ ion-content {
   line-height: 1.5;
   max-width: 280px;
 }
+.shop-queue-note {
+  font-size: 11px;
+  font-weight: 700;
+  color: #ea580c;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  padding: 3px 10px;
+  border-radius: 20px;
+}
 .resi-highlight {
   font-weight: 700;
   color: #2563eb;
@@ -1139,7 +1618,6 @@ ion-content {
   border-radius: 4px;
 }
 
-/* Marketplace List */
 .marketplace-list {
   flex: 1;
   padding: 16px;
@@ -1149,7 +1627,6 @@ ion-content {
   overflow-y: auto;
 }
 
-/* Loading / empty state untuk fetch marketplace */
 .marketplace-loading-state,
 .marketplace-empty-state {
   display: flex;
@@ -1214,7 +1691,6 @@ ion-content {
   border-color: #93c5fd !important;
 }
 
-/* Logo area — sekarang pakai <img> dari API */
 .marketplace-logo-wrap {
   width: 52px;
   height: 52px;
@@ -1234,7 +1710,6 @@ ion-content {
   object-fit: contain;
 }
 
-/* Info */
 .marketplace-info {
   flex: 1;
   display: flex;
@@ -1252,7 +1727,6 @@ ion-content {
   color: #94a3b8;
 }
 
-/* Action icon */
 .marketplace-action {
   display: flex;
   align-items: center;
@@ -1273,7 +1747,6 @@ ion-content {
   height: 20px;
 }
 
-/* Footer modal */
 .shop-modal-footer {
   padding: 14px 16px 24px;
   background: #ffffff;

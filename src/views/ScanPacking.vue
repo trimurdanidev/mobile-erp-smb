@@ -22,7 +22,6 @@
             <ion-icon
               :icon="scanOutline"
               class="scan-section-icon"
-              style="color: #ea580c; background: #fff7ed"
             ></ion-icon>
             <span class="scan-section-title">Barcode Packing</span>
             <span class="engine-badge" v-if="isScanning && scanEngine">
@@ -79,83 +78,120 @@
           </ion-button>
         </div>
 
-        <!-- Input manual -->
+        <!-- Input manual / HID scanner -->
         <div class="scan-card">
           <div class="scan-card-header">
             <ion-icon
               :icon="createOutline"
               class="scan-section-icon"
-              style="color: #ea580c; background: #fff7ed"
+              style="color: #7c3aed; background: #f5f3ff"
             ></ion-icon>
-            <span class="scan-section-title">Input Manual</span>
+            <span class="scan-section-title">Input Manual / Scanner</span>
+            <span class="hid-status" :class="{ 'hid-on': inputFocused }">
+              <i class="hid-dot"></i>
+              {{ inputFocused ? "Scanner siap" : "Tap untuk aktif" }}
+            </span>
           </div>
           <div class="input-row">
             <input
+              ref="packingInputRef"
               v-model="packingNo"
               type="text"
               class="resi-input"
-              placeholder="Masukkan nomor packing..."
-              @keyup.enter="submitPacking"
+              :placeholder="
+                useSoftKeyboard
+                  ? 'Masukkan nomor packing...'
+                  : 'Scan barcode / ketik packing...'
+              "
+              :inputmode="useSoftKeyboard ? 'text' : 'none'"
+              autocomplete="off"
+              autocapitalize="off"
+              autocorrect="off"
+              spellcheck="false"
+              enterkeyhint="done"
+              @keydown.enter.prevent="submitPacking"
+              @focus="inputFocused = true"
+              @blur="onInputBlur"
             />
+            <button
+              class="kb-btn"
+              :class="{ 'kb-btn-active': useSoftKeyboard }"
+              type="button"
+              title="Tampilkan keyboard layar"
+              @click="toggleKeyboard"
+            >
+              <ion-icon :icon="keypadOutline"></ion-icon>
+            </button>
           </div>
         </div>
 
-        <!-- Scan History -->
-        <div class="history-card" v-if="scanHistory.length > 0">
-          <div
-            class="scan-card-header"
-            style="border-bottom: 1px solid #f1f5f9"
-          >
+        <!-- Riwayat scan (list + counter) -->
+        <div class="scan-card">
+          <div class="scan-card-header">
             <ion-icon
               :icon="listOutline"
               class="scan-section-icon"
-              style="color: #ea580c; background: #fff7ed"
+              style="color: #16a34a; background: #f0fdf4"
             ></ion-icon>
-            <span class="scan-section-title"
-              >Riwayat Scan ({{ scanHistory.length }})</span
+            <span class="scan-section-title">Hasil Scan</span>
+            <span class="scan-section-sub">Hari ini · {{ scannedBy }}</span>
+            <button
+              v-if="scanList.length"
+              class="clear-btn"
+              type="button"
+              @click="clearList"
             >
+              <ion-icon :icon="trashOutline"></ion-icon>
+              Bersihkan
+            </button>
           </div>
-          <div class="history-list">
-            <div
-              v-for="(item, i) in scanHistory"
-              :key="i"
-              class="history-item"
-              :class="item.success ? 'history-ok' : 'history-err'"
-            >
-              <ion-icon
-                :icon="
-                  item.success ? checkmarkCircleOutline : closeCircleOutline
-                "
-                class="history-icon"
-              ></ion-icon>
-              <div class="history-text">
-                <div class="history-no">{{ item.no }}</div>
-                <div class="history-msg">{{ item.message }}</div>
-              </div>
-              <span class="history-time">{{ item.time }}</span>
-            </div>
-          </div>
-        </div>
 
-        <!-- Result latest -->
-        <div class="result-card" v-if="lastResult">
-          <div
-            class="result-icon-wrap"
-            :class="lastResult.success ? 'result-ok' : 'result-err'"
-          >
-            <ion-icon
-              :icon="
-                lastResult.success ? checkmarkCircleOutline : closeCircleOutline
-              "
-            ></ion-icon>
-          </div>
-          <div class="result-text">
-            <div class="result-title">
-              {{ lastResult.success ? "Berhasil!" : "Gagal" }}
+          <!-- Counter -->
+          <div class="stat-row">
+            <div class="stat-box stat-total">
+              <span class="stat-num">{{ scanList.length }}</span>
+              <span class="stat-label">Total</span>
             </div>
-            <div class="result-msg">{{ lastResult.message }}</div>
-            <div class="result-resi" v-if="lastResult.no">
-              No: {{ lastResult.no }}
+            <div class="stat-box stat-ok">
+              <span class="stat-num">{{ successCount }}</span>
+              <span class="stat-label">Berhasil</span>
+            </div>
+            <div class="stat-box stat-err">
+              <span class="stat-num">{{ errorCount }}</span>
+              <span class="stat-label">Gagal</span>
+            </div>
+          </div>
+
+          <!-- List scrollable -->
+          <div ref="listRef" class="result-list">
+            <div v-if="!scanList.length" class="result-empty">
+              Belum ada packing yang di-scan.<br />Arahkan scanner ke barcode packing.
+            </div>
+
+            <div
+              v-for="(item, idx) in scanList"
+              :key="item.id"
+              class="result-item"
+              :class="'ri-' + item.status"
+            >
+              <div class="ri-num">{{ scanList.length - idx }}</div>
+              <div class="ri-icon">
+                <ion-spinner
+                  v-if="item.status === 'pending'"
+                  name="crescent"
+                  class="ri-spinner"
+                ></ion-spinner>
+                <ion-icon
+                  v-else-if="item.status === 'success'"
+                  :icon="checkmarkCircleOutline"
+                ></ion-icon>
+                <ion-icon v-else :icon="closeCircleOutline"></ion-icon>
+              </div>
+              <div class="ri-body">
+                <div class="ri-packing">{{ item.packing }}</div>
+                <div class="ri-msg">{{ item.message }}</div>
+                <div class="ri-sub">{{ item.time }} · {{ item.source }}</div>
+              </div>
             </div>
           </div>
         </div>
@@ -163,19 +199,12 @@
         <!-- Submit button -->
         <button
           class="submit-btn"
-          :class="{ 'submit-loading': loading }"
-          :disabled="loading || !packingNo"
+          type="button"
+          :disabled="!packingNo.trim()"
           @click="submitPacking"
         >
-          <ion-spinner
-            v-if="loading"
-            name="crescent"
-            class="btn-spinner"
-          ></ion-spinner>
-          <template v-else>
-            <ion-icon :icon="checkmarkOutline" class="btn-icon"></ion-icon>
-            Konfirmasi Packing
-          </template>
+          <ion-icon :icon="checkmarkOutline" class="btn-icon"></ion-icon>
+          Konfirmasi Packing
         </button>
       </div>
     </ion-content>
@@ -192,6 +221,8 @@ import {
   IonButton,
   IonIcon,
   IonSpinner,
+  onIonViewDidEnter,
+  onIonViewWillLeave,
 } from "@ionic/vue";
 import {
   arrowBackOutline,
@@ -201,40 +232,339 @@ import {
   checkmarkCircleOutline,
   closeCircleOutline,
   checkmarkOutline,
+  keypadOutline,
   listOutline,
+  trashOutline,
   barcodeOutline,
 } from "ionicons/icons";
-import { ref, onUnmounted } from "vue";
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue";
 import api from "@/services/api";
 import { showToast } from "@/services/toastHandlers";
 import { playBeep } from "@/services/audioService";
 
-// ── State ──────────────────────────────────────────
+// ════════════════════════════════════════════════════
+// STATE UTAMA
+// ════════════════════════════════════════════════════
 const packingNo = ref("");
-const loading = ref(false);
 const isScanning = ref(false);
-const isProcessing = ref(false);
-const isMounted = ref(true);
 const videoRef = ref<HTMLVideoElement | null>(null);
-const lastResult = ref<any>(null);
-const scanHistory = ref<any[]>([]);
 const scanEngine = ref("");
 
 const userData = JSON.parse(localStorage.getItem("master_user") || "{}");
 const scannedBy = userData.user || "unknown";
 
-// ── Scanner internals ──────────────────────────────
-let stream: MediaStream | null = null;
-let scanInterval: ReturnType<typeof setInterval> | null = null;
-let zxingReader: any = null;
+// ════════════════════════════════════════════════════
+// RIWAYAT SCAN (list + counter)
+// ════════════════════════════════════════════════════
+type ScanStatus = "pending" | "success" | "error";
+type ScanSource = "HID" | "Kamera" | "Manual";
 
-// ── ROI Canvas (off-screen, tidak di-mount ke DOM) ──
-// Crop area tengah frame sebelum di-decode → decoder tidak perlu
-// proses seluruh gambar, hemat CPU ~50-60%.
+interface ScanItem {
+  id: number;
+  packing: string;
+  status: ScanStatus;
+  message: string;
+  time: string;
+  source: ScanSource;
+}
+
+// ── Persist riwayat ke storage ─────────────────────
+// Key = scan_packing_history:<id user>:<shift>
+// Default: 1 "shift" = 1 hari
+const historyStore: Storage = localStorage;
+const HISTORY_PREFIX = "scan_packing_history:";
+const HISTORY_MAX = 500; // batas item yang disimpan
+
+const getShiftKey = () => {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
+const buildHistoryKey = () =>
+  `${HISTORY_PREFIX}${userData.id ?? scannedBy}:${getShiftKey()}`;
+
+let activeKey = buildHistoryKey();
+
+const loadHistory = (): ScanItem[] => {
+  try {
+    // Bersihkan riwayat shift/hari sebelumnya (punya semua user di device ini)
+    const suffix = `:${getShiftKey()}`;
+    Object.keys(historyStore)
+      .filter((k) => k.startsWith(HISTORY_PREFIX) && !k.endsWith(suffix))
+      .forEach((k) => historyStore.removeItem(k));
+
+    const raw = historyStore.getItem(activeKey);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+
+    // Item yang belum selesai saat halaman ditinggal statusnya nggak pasti
+    // → tandai gagal, user tinggal scan ulang untuk cek status di server.
+    return parsed.map((i: ScanItem) => {
+      if (i.status === "pending") {
+        return {
+          ...i,
+          status: "error" as ScanStatus,
+          message: "Terputus saat pindah halaman — scan ulang untuk cek status",
+        };
+      }
+      return i;
+    });
+  } catch (err) {
+    console.warn("Gagal membaca riwayat scan:", err);
+    return [];
+  }
+};
+
+let saveTimer: any = null;
+const saveHistory = () => {
+  try {
+    if (scanList.value.length === 0) {
+      historyStore.removeItem(activeKey);
+    } else {
+      historyStore.setItem(
+        activeKey,
+        JSON.stringify(scanList.value.slice(0, HISTORY_MAX))
+      );
+    }
+  } catch (err) {
+    console.warn("Gagal menyimpan riwayat scan:", err);
+  }
+};
+const flushHistory = () => {
+  clearTimeout(saveTimer);
+  saveHistory();
+};
+
+const scanList = ref<ScanItem[]>(loadHistory()); // index 0 = scan terbaru
+const listRef = ref<HTMLElement | null>(null);
+let scanSeq = scanList.value.reduce((max, i) => Math.max(max, i.id), 0);
+
+// Simpan otomatis setiap ada perubahan (debounce 200ms)
+watch(
+  scanList,
+  () => {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveHistory, 200);
+  },
+  { deep: true }
+);
+
+// Kalau app dibiarkan terbuka lewat pergantian hari/shift → mulai list baru
+const reloadIfShiftChanged = () => {
+  const key = buildHistoryKey();
+  if (key === activeKey) return;
+  flushHistory();
+  activeKey = key;
+  scanList.value = loadHistory();
+  scanSeq = scanList.value.reduce((max, i) => Math.max(max, i.id), 0);
+};
+
+const successCount = computed(
+  () => scanList.value.filter((i) => i.status === "success").length
+);
+const errorCount = computed(
+  () => scanList.value.filter((i) => i.status === "error").length
+);
+
+const updateItem = (id: number, patch: Partial<ScanItem>) => {
+  const item = scanList.value.find((i) => i.id === id);
+  if (item) Object.assign(item, patch);
+};
+
+const nowTime = () =>
+  new Date().toLocaleTimeString("id-ID", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+
+const scrollListToTop = () =>
+  nextTick(() => {
+    if (listRef.value) listRef.value.scrollTop = 0;
+  });
+
+const clearList = () => {
+  if (!window.confirm("Bersihkan semua riwayat scan hari ini?")) return;
+  // Item yang masih diproses / nunggu pilih marketplace jangan dihapus
+  scanList.value = scanList.value.filter((i) => i.status === "pending");
+  focusInput();
+};
+
+// ════════════════════════════════════════════════════
+// CORE SCAN — dipakai HID, kamera, dan manual
+// Non-blocking: input langsung siap untuk scan berikutnya
+// tanpa nunggu response API.
+// ════════════════════════════════════════════════════
+const RECENT_WINDOW_MS: Record<ScanSource, number> = {
+  HID: 1500,
+  Manual: 1500,
+  Kamera: 3000, // kamera kebaca terus selama barcode masih di depan lensa
+};
+const recentReads = new Map<string, number>();
+
+const enqueueScan = (raw: string, source: ScanSource) => {
+  const packing = (raw || "").trim();
+  if (!packing) return;
+
+  // 1) Guard double-read (scanner kebaca 2x / kamera kebaca terus).
+  //    Timestamp di-refresh tiap kali kebaca, jadi selama barcode masih
+  //    terbaca terus-menerus, tidak akan bikin baris baru.
+  const now = Date.now();
+  const last = recentReads.get(packing);
+  recentReads.set(packing, now);
+  if (last && now - last < RECENT_WINDOW_MS[source]) return;
+
+  // 2) Cek riwayat sesi ini
+  const existing = scanList.value.find(
+    (i) => i.packing === packing && i.status !== "error"
+  );
+  if (existing) {
+    // Masih diproses / nunggu pilih marketplace → abaikan diam-diam
+    if (existing.status === "pending") {
+      return;
+    }
+    // Sudah sukses di sesi ini → kasih tanda duplikat tanpa hit API
+    playBeep("error");
+    scanList.value.unshift({
+      id: ++scanSeq,
+      packing,
+      status: "error",
+      message: "Packing sudah di-scan di sesi ini",
+      time: nowTime(),
+      source,
+    });
+    scrollListToTop();
+    return;
+  }
+
+  // 3) Scan baru → tampil langsung (pending), kirim ke API di background
+  const id = ++scanSeq;
+  scanList.value.unshift({
+    id,
+    packing,
+    status: "pending",
+    message: "Memproses...",
+    time: nowTime(),
+    source,
+  });
+  scrollListToTop();
+  processScan(id);
+};
+
+const applyResponse = (id: number, data: any) => {
+  if (data.success) {
+    updateItem(id, {
+      status: "success",
+      message: data.message || "Packing berhasil di-scan",
+    });
+    playBeep("success");
+  } else {
+    updateItem(id, {
+      status: "error",
+      message: data.message || "Gagal scan packing",
+    });
+    playBeep("error");
+  }
+};
+
+const processScan = async (id: number) => {
+  const item = scanList.value.find((i) => i.id === id);
+  if (!item) return;
+
+  const payload = {
+    resi_no: item.packing, // API menggunakan field resi_no untuk packing juga
+    packing_by: scannedBy,
+  };
+
+  try {
+    const response = await api.post("/resi/scan-packing", payload);
+    applyResponse(id, response.data);
+  } catch (err: any) {
+    const data = err.response?.data;
+    playBeep("error");
+    updateItem(id, {
+      status: "error",
+      message: data?.message || "Gagal scan packing",
+    });
+  }
+};
+
+// ════════════════════════════════════════════════════
+// INPUT: HID BARCODE SCANNER + MANUAL
+// HID scanner = "keyboard" yang ngetik packing lalu kirim Enter.
+// Kuncinya: input SELALU fokus, Enter langsung submit, input langsung
+// dikosongkan (tanpa nunggu API) → scan berikutnya bisa langsung masuk.
+// ════════════════════════════════════════════════════
+const packingInputRef = ref<HTMLInputElement | null>(null);
+const inputFocused = ref(false);
+const useSoftKeyboard = ref(false); // false = keyboard layar disembunyikan (mode scanner)
+let isPageActive = true;
+
+const focusInput = () =>
+  nextTick(() => packingInputRef.value?.focus({ preventScroll: true }));
+
+const submitPacking = () => {
+  const value = packingNo.value.trim();
+  if (!value) {
+    focusInput();
+    return;
+  }
+  packingNo.value = ""; // kosongkan dulu → siap untuk scan berikutnya
+  enqueueScan(value, useSoftKeyboard.value ? "Manual" : "HID");
+  focusInput();
+};
+
+const toggleKeyboard = () => {
+  useSoftKeyboard.value = !useSoftKeyboard.value;
+  nextTick(() => {
+    const el = packingInputRef.value;
+    if (!el) return;
+    el.blur();
+    el.focus({ preventScroll: true });
+  });
+};
+
+// Kalau fokus lepas (misal habis tap tombol lain), balikin otomatis
+const onInputBlur = () => {
+  inputFocused.value = false;
+  setTimeout(() => {
+    if (!isPageActive) return;
+    const a = document.activeElement as HTMLElement | null;
+    if (a && ["INPUT", "TEXTAREA", "SELECT"].includes(a.tagName)) return;
+    packingInputRef.value?.focus({ preventScroll: true });
+  }, 150);
+};
+
+// Fallback: kalau ada karakter masuk padahal fokus lagi di tombol/elemen lain,
+// tarik fokus ke input (karakter pertama tetap masuk ke input).
+const onGlobalKeydown = (e: KeyboardEvent) => {
+  if (!isPageActive) return;
+  if (e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1) return;
+  const t = e.target as HTMLElement | null;
+  if (
+    t &&
+    (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)
+  ) {
+    return;
+  }
+  packingInputRef.value?.focus({ preventScroll: true });
+};
+
+// ════════════════════════════════════════════════════
+// SCANNER KAMERA
+// ════════════════════════════════════════════════════
+let stream: MediaStream | null = null;
+let scanInterval: any = null;
+let detecting = false; // cegah detect() numpuk kalau lebih lambat dari interval
+
+// Off-screen canvas untuk ROI crop (hanya di memory, tidak di-mount ke DOM)
 let roiCanvas: HTMLCanvasElement | null = null;
 let roiCtx: CanvasRenderingContext2D | null = null;
-const ROI_W_RATIO = 0.7; // 70% lebar frame (sesuai area kotak scan overlay)
-const ROI_H_RATIO = 0.5; // 50% tinggi frame
+
+const ROI_W_RATIO = 0.7;
+const ROI_H_RATIO = 0.5;
 
 const initRoiCanvas = (videoW: number, videoH: number) => {
   roiCanvas = document.createElement("canvas");
@@ -265,166 +595,145 @@ const cropRoi = (video: HTMLVideoElement): HTMLCanvasElement | null => {
   return roiCanvas;
 };
 
-// ── Buka kamera ────────────────────────────────────
-const openCamera = async (): Promise<boolean> => {
-  if (!navigator.mediaDevices?.getUserMedia) {
-    await showToast(
-      "Kamera tidak tersedia. Pastikan akses via HTTPS.",
-      "danger"
-    );
-    return false;
-  }
-
-  // ── Resolusi diturunkan ke 640×480 (VGA) ──
-  // Makin kecil frame → makin banyak frame/detik yang bisa di-decode.
-  // Untuk barcode 1D (Code128/Code39) resolusi ini sudah lebih dari cukup.
-  const constraints: MediaStreamConstraints[] = [
-    {
-      video: {
-        facingMode: { exact: "environment" },
-        width: { ideal: 640 },
-        height: { ideal: 480 },
-      },
-    },
-    {
-      video: {
-        facingMode: "environment",
-        width: { ideal: 640 },
-        height: { ideal: 480 },
-      },
-    },
-    { video: { facingMode: "environment" } },
-    { video: true },
-  ];
-
-  for (const constraint of constraints) {
-    try {
-      stream = await navigator.mediaDevices.getUserMedia(constraint);
-      break;
-    } catch (e) {
-      console.warn("Coba constraint berikutnya:", e);
-    }
-  }
-
-  if (!stream) {
-    await showToast(
-      "Gagal akses kamera. Pastikan izin kamera sudah diberikan.",
-      "danger"
-    );
-    return false;
-  }
-
-  if (videoRef.value) {
-    videoRef.value.srcObject = stream;
-    try {
-      await videoRef.value.play();
-    } catch (playErr) {
-      // Aman di-ignore di beberapa device — autoplay policy
-      console.warn("Video play warning (aman):", playErr);
-    }
-  }
-
-  return true;
-};
-
-// ── Engine 1: Native BarcodeDetector (Android/Chrome) ──
-const startNativeScanner = () => {
-  scanEngine.value = "Native";
-
-  const detector = new (window as any).BarcodeDetector({
-    // Tambah ITF — format umum di barcode packing/warehouse
-    formats: [
-      "code_128",
-      "code_39",
-      "ean_13",
-      "ean_8",
-      "qr_code",
-      "data_matrix",
-      "itf",
-    ],
-  });
-
-  // ── Interval 80ms (≈12 fps decode) vs 500ms sebelumnya ──
-  // → deteksi ~6x lebih cepat. Guard isProcessing tetap ada
-  // supaya tidak double-submit saat API sedang diproses.
-  scanInterval = setInterval(async () => {
-    const video = videoRef.value;
-    if (!video || video.readyState < 2) return;
-    if (isProcessing.value || !isMounted.value) return;
-
-    try {
-      // Init ROI canvas sekali saat ukuran video sudah diketahui
-      if (!roiCanvas && video.videoWidth > 0) {
-        initRoiCanvas(video.videoWidth, video.videoHeight);
-      }
-
-      // Decode hanya area ROI (bukan full frame) → hemat CPU ~50-60%
-      const source = roiCanvas ? cropRoi(video) ?? video : video;
-      const barcodes = await detector.detect(source);
-
-      if (barcodes.length > 0) {
-        // Langsung callback — tidak perlu tunggu animasi scan line
-        await submitPackingAuto(barcodes[0].rawValue);
-      }
-    } catch (_) {}
-  }, 80); // ← 80ms
-};
-
-// ── Engine 2: ZXing (iOS Safari, Firefox, dll) ────
-const startZXingScanner = async () => {
-  scanEngine.value = "ZXing";
-
-  try {
-    const ZXingBrowser = await import("@zxing/browser");
-    const ZXingLibrary = await import("@zxing/library");
-
-    const hints = new Map();
-    hints.set(ZXingLibrary.DecodeHintType.POSSIBLE_FORMATS, [
-      ZXingLibrary.BarcodeFormat.CODE_128,
-      ZXingLibrary.BarcodeFormat.CODE_39,
-      ZXingLibrary.BarcodeFormat.EAN_13,
-      ZXingLibrary.BarcodeFormat.EAN_8,
-      ZXingLibrary.BarcodeFormat.QR_CODE,
-      ZXingLibrary.BarcodeFormat.DATA_MATRIX,
-      ZXingLibrary.BarcodeFormat.ITF,
-    ]);
-    // TRY_HARDER: ZXing mencoba lebih keras untuk barcode miring/buram/kecil
-    hints.set(ZXingLibrary.DecodeHintType.TRY_HARDER, true);
-
-    zxingReader = new ZXingBrowser.BrowserMultiFormatReader(hints, {
-      delayBetweenScanAttempts: 80, // ← turun dari 300ms ke 80ms
-    });
-
-    if (videoRef.value && stream) {
-      await zxingReader.decodeFromStream(
-        stream,
-        videoRef.value,
-        async (result: any, err: any) => {
-          if (!result || isProcessing.value || !isMounted.value) return;
-          await submitPackingAuto(result.getText());
-        }
-      );
-    }
-  } catch (importErr) {
-    console.error("Gagal load ZXing:", importErr);
-    await showToast(
-      "Scanner tidak dapat dimuat. Coba gunakan Input Manual.",
-      "warning"
-    );
-  }
-};
-
-// ── Start / Stop / Toggle ──────────────────────────
 const startScan = async () => {
-  const cameraOk = await openCamera();
-  if (!cameraOk) return;
+  try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      await showToast(
+        "Kamera tidak tersedia. Pastikan akses via HTTPS.",
+        "danger"
+      );
+      return;
+    }
 
-  isScanning.value = true;
+    const constraints: MediaStreamConstraints[] = [
+      {
+        video: {
+          facingMode: { exact: "environment" },
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+        },
+      },
+      {
+        video: {
+          facingMode: "environment",
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+        },
+      },
+      { video: { facingMode: "environment" } },
+      { video: true },
+    ];
 
-  if (typeof (window as any).BarcodeDetector !== "undefined") {
-    startNativeScanner();
-  } else {
-    await startZXingScanner();
+    for (const c of constraints) {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(c);
+        break;
+      } catch (_) {
+        /* coba constraint berikutnya */
+      }
+    }
+
+    if (!stream) {
+      await showToast(
+        "Gagal akses kamera. Berikan izin kamera di browser.",
+        "danger"
+      );
+      return;
+    }
+
+    if (videoRef.value) {
+      videoRef.value.srcObject = stream;
+      try {
+        await videoRef.value.play();
+      } catch (_) {}
+    }
+    isScanning.value = true;
+
+    // ── Engine 1: Native BarcodeDetector (Chrome/Android) ──
+    if ("BarcodeDetector" in window) {
+      const detector = new (window as any).BarcodeDetector({
+        // Tambah ITF — format umum di barcode packing/warehouse
+        formats: [
+          "code_128",
+          "code_39",
+          "ean_13",
+          "ean_8",
+          "qr_code",
+          "data_matrix",
+          "itf",
+        ],
+      });
+
+      scanInterval = setInterval(async () => {
+        const video = videoRef.value;
+        if (!video || video.readyState < 2 || detecting) return;
+        detecting = true;
+
+        try {
+          // Init ROI canvas sekali saat ukuran video sudah diketahui
+          if (!roiCanvas && video.videoWidth > 0) {
+            initRoiCanvas(video.videoWidth, video.videoHeight);
+          }
+
+          // Decode hanya area ROI (bukan full frame) → hemat CPU ~50-60%
+          const source = roiCanvas ? cropRoi(video) ?? video : video;
+          const barcodes = await detector.detect(source);
+
+          if (barcodes.length > 0) {
+            // Non-blocking + sudah ada guard duplikat di enqueueScan
+            enqueueScan(barcodes[0].rawValue, "Kamera");
+          }
+        } catch (_) {
+        } finally {
+          detecting = false;
+        }
+      }, 80); // ← 80ms (diubah dari 500ms sebelumnya untuk responsivitas)
+    } else {
+      // ── Engine 2: ZXing fallback (iOS Safari / Firefox) ──
+      console.warn("BarcodeDetector tidak didukung, fallback ke ZXing.");
+
+      try {
+        const ZXingBrowser = await import("@zxing/browser");
+        const ZXingLibrary = await import("@zxing/library");
+
+        const hints = new Map();
+        hints.set(ZXingLibrary.DecodeHintType.POSSIBLE_FORMATS, [
+          ZXingLibrary.BarcodeFormat.CODE_128,
+          ZXingLibrary.BarcodeFormat.CODE_39,
+          ZXingLibrary.BarcodeFormat.EAN_13,
+          ZXingLibrary.BarcodeFormat.EAN_8,
+          ZXingLibrary.BarcodeFormat.QR_CODE,
+          ZXingLibrary.BarcodeFormat.DATA_MATRIX,
+          ZXingLibrary.BarcodeFormat.ITF,
+        ]);
+        // TRY_HARDER: ZXing mencoba lebih keras untuk barcode miring/buram/kecil
+        hints.set(ZXingLibrary.DecodeHintType.TRY_HARDER, true);
+
+        const zxingReader = new ZXingBrowser.BrowserMultiFormatReader(hints, {
+          delayBetweenScanAttempts: 80, // ← turun dari 300ms ke 80ms
+        });
+
+        if (videoRef.value && stream) {
+          await zxingReader.decodeFromStream(
+            stream,
+            videoRef.value,
+            async (result: any, err: any) => {
+              if (!result) return;
+              enqueueScan(result.getText(), "Kamera");
+            }
+          );
+        }
+      } catch (importErr) {
+        console.error("Gagal load ZXing:", importErr);
+        await showToast(
+          "Scanner tidak dapat dimuat. Coba gunakan Input Manual.",
+          "warning"
+        );
+      }
+    }
+  } catch (err: any) {
+    console.error("Kamera error:", err);
+    await showToast("Gagal akses kamera: " + (err.message || err), "danger");
   }
 };
 
@@ -433,16 +742,6 @@ const stopScan = async () => {
   if (scanInterval) {
     clearInterval(scanInterval);
     scanInterval = null;
-  }
-
-  // Stop ZXing reader
-  if (zxingReader) {
-    try {
-      zxingReader.reset();
-    } catch (e) {
-      console.warn("ZXing reset error:", e);
-    }
-    zxingReader = null;
   }
 
   // Stop semua track kamera
@@ -464,6 +763,7 @@ const stopScan = async () => {
   // Bersihkan ROI canvas dari memory
   roiCanvas = null;
   roiCtx = null;
+  detecting = false;
 
   isScanning.value = false;
   isProcessing.value = false;
@@ -473,119 +773,56 @@ const stopScan = async () => {
 const toggleScan = async () => {
   if (isScanning.value) await stopScan();
   else await startScan();
+  focusInput();
 };
+
+// ── State tambahan untuk kamera (menjaga kompatibilitas) ──
+const loading = ref(false);
+const isProcessing = ref(false);
+const isMounted = ref(true);
+const lastResult = ref<any>(null);
 
 onUnmounted(async () => {
   isMounted.value = false;
   await stopScan();
 });
 
-// ── Submit Auto dari Scanner ───────────────────────
-const submitPackingAuto = async (scanned: string) => {
-  if (!scanned.trim() || isProcessing.value || !isMounted.value) return;
-
-  isProcessing.value = true;
-  lastResult.value = null;
-
-  try {
-    const response = await api.post("/resi/scan-packing", {
-      resi_no: scanned.trim(),
-      packing_by: scannedBy,
-    });
-
-    const result = {
-      success: true,
-      message: response.data.message || "Packing berhasil di-scan",
-      no: scanned,
-      time: new Date().toLocaleTimeString("id-ID", {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-    };
-
-    if (!isMounted.value) return;
-    lastResult.value = result;
-    scanHistory.value.unshift(result);
-    if (scanHistory.value.length > 10) scanHistory.value.pop();
-
-    playBeep("success");
-    await showToast("✅ " + result.message, "success");
-  } catch (err: any) {
-    if (!isMounted.value) return;
-    playBeep("error");
-    const msg = err.response?.data?.message || "Gagal scan packing";
-    const result = {
-      success: false,
-      message: msg,
-      no: scanned,
-      time: new Date().toLocaleTimeString("id-ID", {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-    };
-    lastResult.value = result;
-    scanHistory.value.unshift(result);
-    if (scanHistory.value.length > 10) scanHistory.value.pop();
-    await showToast("❌ " + msg, "danger");
-  } finally {
-    setTimeout(() => {
-      if (isMounted.value) isProcessing.value = false;
-    }, 2000);
-  }
+// ════════════════════════════════════════════════════
+// LIFECYCLE
+// ════════════════════════════════════════════════════
+// Simpan langsung saat app masuk background / halaman disembunyikan.
+// Di Android, app bisa di-kill OS tanpa sempat unmount → tanpa ini scan
+// terakhir (yang masih nunggu debounce) bisa hilang.
+const onVisibilityChange = () => {
+  if (document.visibilityState === "hidden") flushHistory();
 };
 
-// ── Submit Manual ──────────────────────────────────
-const submitPacking = async () => {
-  if (!packingNo.value.trim()) {
-    await showToast("Masukkan nomor packing terlebih dahulu", "warning");
-    return;
-  }
+onMounted(() => {
+  document.addEventListener("keydown", onGlobalKeydown);
+  document.addEventListener("visibilitychange", onVisibilityChange);
+  window.addEventListener("pagehide", flushHistory);
+  setTimeout(focusInput, 300);
+});
 
-  loading.value = true;
-  lastResult.value = null;
+onIonViewDidEnter(() => {
+  isPageActive = true;
+  reloadIfShiftChanged();
+  setTimeout(focusInput, 200);
+});
 
-  try {
-    const response = await api.post("/resi/scan-packing", {
-      resi_no: packingNo.value.trim(),
-      packing_by: scannedBy,
-    });
+onIonViewWillLeave(() => {
+  isPageActive = false;
+  flushHistory();
+  stopScan();
+});
 
-    const result = {
-      success: true,
-      message: response.data.message || "Packing berhasil di-scan",
-      no: packingNo.value,
-      time: new Date().toLocaleTimeString("id-ID", {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-    };
-
-    playBeep("success");
-    lastResult.value = result;
-    scanHistory.value.unshift(result);
-    if (scanHistory.value.length > 10) scanHistory.value.pop();
-    await showToast("✅ " + result.message, "success");
-    packingNo.value = "";
-  } catch (err: any) {
-    playBeep("error");
-    const msg = err.response?.data?.message || "Gagal scan packing";
-    const result = {
-      success: false,
-      message: msg,
-      no: packingNo.value,
-      time: new Date().toLocaleTimeString("id-ID", {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-    };
-    lastResult.value = result;
-    scanHistory.value.unshift(result);
-    if (scanHistory.value.length > 10) scanHistory.value.pop();
-    await showToast("❌ " + msg, "danger");
-  } finally {
-    loading.value = false;
-  }
-};
+onUnmounted(() => {
+  document.removeEventListener("keydown", onGlobalKeydown);
+  document.removeEventListener("visibilitychange", onVisibilityChange);
+  window.removeEventListener("pagehide", flushHistory);
+  flushHistory();
+  stopScan();
+});
 </script>
 
 <style scoped>
@@ -834,9 +1071,13 @@ ion-content {
 
 .input-row {
   padding: 14px 16px;
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
 }
 .resi-input {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   padding: 12px 14px;
   font-size: 14px;
   border: 1.5px solid #e2e8f0;
@@ -850,107 +1091,209 @@ ion-content {
 .resi-input:focus {
   border-color: #ea580c;
 }
-
-.history-card {
-  background: #fff;
-  border-radius: 20px;
-  overflow: hidden;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
-}
-.history-list {
-  max-height: 200px;
-  overflow-y: auto;
-}
-.history-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 16px;
-  border-bottom: 1px solid #f8fafc;
-}
-.history-item:last-child {
-  border-bottom: none;
-}
-.history-ok {
-  background: #f0fdf4;
-}
-.history-err {
-  background: #fef2f2;
-}
-.history-icon {
-  font-size: 18px;
+.kb-btn {
+  width: 46px;
   flex-shrink: 0;
-}
-.history-ok .history-icon {
-  color: #16a34a;
-}
-.history-err .history-icon {
-  color: #dc2626;
-}
-.history-text {
-  flex: 1;
-  min-width: 0;
-}
-.history-no {
-  font-size: 12px;
-  font-weight: 700;
-  color: #1e293b;
-  font-family: monospace;
-}
-.history-msg {
-  font-size: 11px;
-  color: #64748b;
-}
-.history-time {
-  font-size: 10px;
-  color: #94a3b8;
-  white-space: nowrap;
-}
-
-.result-card {
-  background: #fff;
-  border-radius: 16px;
-  padding: 16px;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
-}
-.result-icon-wrap {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
-  flex-shrink: 0;
-}
-.result-ok {
-  background: #dcfce7;
-  color: #16a34a;
-}
-.result-err {
-  background: #fee2e2;
-  color: #dc2626;
-}
-.result-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: #1e293b;
-}
-.result-msg {
-  font-size: 12px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
   color: #64748b;
-  margin-top: 2px;
+  font-size: 20px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
-.result-resi {
-  font-size: 11px;
-  color: #94a3b8;
-  margin-top: 4px;
-  font-family: monospace;
+.kb-btn-active {
+  background: #eff6ff;
+  border-color: #ea580c;
+  color: #ea580c;
 }
 
+/* Status HID (kanan header input) */
+.hid-status {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+.hid-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #cbd5e1;
+}
+.hid-on {
+  color: #16a34a;
+}
+.hid-on .hid-dot {
+  background: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.2);
+}
+
+/* ─── Hasil Scan: tombol bersihkan ── */
+.clear-btn {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 9px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #dc2626;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ─── Counter ── */
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 12px 16px 4px;
+}
+.stat-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 4px;
+  border-radius: 12px;
+}
+.stat-num {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+.stat-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  margin-top: 2px;
+}
+.stat-total {
+  background: #f1f5f9;
+  color: #334155;
+}
+.stat-ok {
+  background: #dcfce7;
+  color: #15803d;
+}
+.stat-err {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+/* ─── List scrollable ── */
+.result-list {
+  margin: 8px 12px 14px;
+  max-height: 260px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-right: 4px;
+}
+.result-list::-webkit-scrollbar {
+  width: 6px;
+}
+.result-list::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 6px;
+}
+.result-list::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 6px;
+}
+.result-empty {
+  padding: 22px 12px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #94a3b8;
+}
+
+.result-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border-left: 4px solid transparent;
+  background: #f8fafc;
+  flex-shrink: 0;
+}
+.ri-success {
+  background: #f0fdf4;
+  border-left-color: #22c55e;
+}
+.ri-error {
+  background: #fef2f2;
+  border-left-color: #ef4444;
+}
+.ri-pending {
+  background: #eff6ff;
+  border-left-color: #3b82f6;
+}
+
+.ri-num {
+  min-width: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-align: center;
+}
+.ri-icon {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+}
+.ri-success .ri-icon {
+  color: #16a34a;
+}
+.ri-error .ri-icon {
+  color: #dc2626;
+}
+.ri-spinner {
+  --color: #2563eb;
+  width: 18px;
+  height: 18px;
+}
+.ri-body {
+  flex: 1;
+  min-width: 0;
+}
+.ri-packing {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #1e293b;
+  font-family: monospace;
+  word-break: break-all;
+}
+.ri-msg {
+  font-size: 11.5px;
+  color: #475569;
+  margin-top: 1px;
+  line-height: 1.35;
+}
+.ri-sub {
+  font-size: 10px;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+/* ─── Submit Button ── */
 .submit-btn {
   display: flex;
   align-items: center;
@@ -969,22 +1312,14 @@ ion-content {
   transition: transform 0.15s;
   -webkit-tap-highlight-color: transparent;
 }
-.submit-btn:active:not(.submit-loading) {
+.submit-btn:active:not(:disabled) {
   transform: scale(0.97);
 }
 .submit-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
-.submit-loading {
-  opacity: 0.75;
-}
 .btn-icon {
   font-size: 18px;
-}
-.btn-spinner {
-  --color: #fff;
-  width: 18px;
-  height: 18px;
 }
 </style>

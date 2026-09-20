@@ -15,6 +15,7 @@ import HistoryScan from "@/views/ViewHistoryScan.vue";
 import LaporanStatus from "@/views/LaporanStatus.vue";
 import LaporanAdmin from "@/views/LaporanAdmin.vue";
 import StokDetailPage from "@/views/StokDetailPage.vue";
+import Setting from "@/views/Setting.vue";
 
 const routes: Array<RouteRecordRaw> = [
   {
@@ -87,6 +88,10 @@ const routes: Array<RouteRecordRaw> = [
       {
         path: "/stok-detail",
         component: StokDetailPage,
+      },
+      {
+        path: "/setting",
+        component: Setting,
       },
       {
         path: "/logout",

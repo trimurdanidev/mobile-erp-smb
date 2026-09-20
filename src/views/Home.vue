@@ -93,6 +93,19 @@
             <span class="action-title">Laporan</span>
           </button>
 
+          <!-- Pengaturan dipindah ke sini supaya berpasangan dalam grid,
+               sebelum banner ERP SMB Web yang full-width -->
+          <button
+            class="action-card"
+            @click="goTo('setting')"
+            aria-label="Pengaturan"
+          >
+            <div class="action-icon-wrap setting-icon-bg">
+              <ion-icon :icon="cogOutline"></ion-icon>
+            </div>
+            <span class="action-title">Pengaturan</span>
+          </button>
+
           <button
             class="action-card action-card-wide"
             @click="openErpWeb"
@@ -163,35 +176,34 @@
               </div>
 
               <div v-else class="rank-table-wrap">
-                <div class="rank-head">
-                  <span class="rh-no">#</span>
-                  <span class="rh-name">Nama</span>
-                  <span class="rh-avg">Avg Masuk</span>
-                </div>
-                <div class="rank-scroll">
-                  <div
-                    v-for="(item, index) in dataArray.slice(0, 10)"
-                    :key="index"
-                    class="rank-row"
-                    :class="{ 'rank-top3': index < 3 }"
-                  >
-                    <span class="rh-no">
-                      <span v-if="index === 0" class="medal medal-gold">1</span>
-                      <span v-else-if="index === 1" class="medal medal-silver"
-                        >2</span
-                      >
-                      <span v-else-if="index === 2" class="medal medal-bronze"
-                        >3</span
-                      >
-                      <span v-else class="rank-plain">{{ index + 1 }}</span>
-                    </span>
-                    <div class="rh-name name-col">
-                      <span class="name-main">{{ item.namaKaryawan }}</span>
-                      <span class="name-dept">{{ item.bagian }}</span>
+                <div class="rank-inner">
+                  <div class="rank-head">
+                    <span class="rh-no">#</span>
+                    <span class="rh-name">Nama</span>
+                    <span class="rh-avg">Avg Masuk</span>
+                  </div>
+                  <div class="rank-scroll">
+                    <div
+                      v-for="(item, index) in dataArray"
+                      :key="index"
+                      class="rank-row"
+                      :class="{ 'rank-top3': index < 3 }"
+                    >
+                      <!-- isi row tetap sama seperti sebelumnya -->
+                      <span class="rh-no">
+                        <span v-if="index === 0" class="medal medal-gold">1</span>
+                        <span v-else-if="index === 1" class="medal medal-silver">2</span>
+                        <span v-else-if="index === 2" class="medal medal-bronze">3</span>
+                        <span v-else class="rank-plain">{{ index + 1 }}</span>
+                      </span>
+                      <div class="rh-name name-col">
+                        <span class="name-main">{{ item.namaKaryawan }}</span>
+                        <span class="name-dept">{{ item.bagian }}</span>
+                      </div>
+                      <span class="rh-avg">
+                        <span class="avg-badge">{{ item.rataJamMasuk }}</span>
+                      </span>
                     </div>
-                    <span class="rh-avg">
-                      <span class="avg-badge">{{ item.rataJamMasuk }}</span>
-                    </span>
                   </div>
                 </div>
               </div>
@@ -385,6 +397,7 @@ import {
   searchOutline,
   closeCircleOutline,
   arrowForwardCircleOutline,
+  cogOutline,
 } from "ionicons/icons";
 import { onMounted, onUnmounted, ref, computed } from "vue";
 import api from "@/services/api";
@@ -726,6 +739,7 @@ export default {
       onTouchStart,
       onTouchMove,
       onTouchEnd,
+      cogOutline
     };
   },
 };
@@ -889,6 +903,9 @@ ion-content::part(scroll) {
 .erp-icon-bg {
   background: rgba(255, 255, 255, 0.15);
   border: 1.5px solid rgba(255, 255, 255, 0.25);
+}
+.setting-icon-bg {
+  background: linear-gradient(135deg, #64748b, #475569);
 }
 
 /* ══════════════════════════════════════
@@ -1083,9 +1100,20 @@ ion-content::part(scroll) {
 /* ── Ranking Table ── */
 .rank-table-wrap {
   flex: 1;
+  position: relative;
+  min-height: 240px;
+}
+.rank-inner {
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+}
+.rank-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .rank-head {
   display: grid;
@@ -1100,7 +1128,7 @@ ion-content::part(scroll) {
   border-bottom: 1px solid #f1f5f9;
   flex-shrink: 0;
 }
-.rank-scroll {
+/* .rank-scroll {
   overflow-y: auto;
   max-height: 240px;
   -webkit-overflow-scrolling: touch;
@@ -1111,7 +1139,7 @@ ion-content::part(scroll) {
 .rank-scroll::-webkit-scrollbar-thumb {
   background: #e2e8f0;
   border-radius: 3px;
-}
+} */
 
 .rank-row {
   display: grid;

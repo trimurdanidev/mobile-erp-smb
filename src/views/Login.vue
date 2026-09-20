@@ -10,7 +10,7 @@
             class="hero-logo"
           />
           <h1 class="hero-title">ERP SMB</h1>
-          <p class="hero-sub">Sistem Absensi & Manajemen Karyawan</p>
+          <p class="hero-sub">Enterprise Resource Planning<br><strong>Sparepart Motor Bekasi</strong></p>
         </div>
 
         <!-- Login Card -->
@@ -103,7 +103,7 @@
 
           <!-- Footer -->
           <p class="footer-text">
-            © FAH Software 2025. All rights reserved.<br />Versi 2.1.0
+            © FAH Software 2025. All rights reserved.<br />Versi 2.1.1
           </p>
         </div>
       </div>
@@ -362,8 +362,26 @@ ion-content {
 }
 
 /* ─── Hero Section ──────────────────────────────── */
-.login-hero {
+/* .login-hero {
   background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
+  padding: 52px 24px 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  border-radius: 0 0 36px 36px;
+  box-shadow: 0 8px 32px rgba(37, 99, 235, 0.35);
+} */
+.login-hero {
+  /* Layer atas: gradient biru semi-transparan (warna sama seperti sebelumnya)
+     Layer bawah: gambar header_bg.png */
+  background: linear-gradient(
+      135deg,
+      rgba(30, 58, 138, 0.88) 0%,
+      rgba(37, 99, 235, 0.78) 100%
+    ),
+    url("/header_bg.png") center / cover no-repeat;
+  background-color: #1e3a8a; /* fallback kalau gambar gagal dimuat */
   padding: 52px 24px 44px;
   display: flex;
   flex-direction: column;

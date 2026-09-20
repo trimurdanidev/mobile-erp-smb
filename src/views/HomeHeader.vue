@@ -10,10 +10,11 @@
         </div>
         <div class="avatar-circle" @click="goToProfile">
           <img
-            v-if="avatarUrl"
-            :src="avatarUrl"
+            v-if="avatarSrc"
+            :src="avatarSrc"
             class="avatar-img"
-            @error="avatarUrl = null"
+            :class="{ 'avatar-default': !avatarUrl }"
+            @error="onAvatarError"
           />
           <span v-else class="avatar-initial">{{ avatarInitial }}</span>
         </div>
@@ -91,6 +92,33 @@ export default {
     const seterAbsenmasuk = ref(null);
     const dd = ref(null);
     const avatarUrl = ref(null);
+    const avatarFallbackFailed = ref(false);
+
+    const storageOrigin = (() => {
+      return new URL(api.defaults.baseURL).origin;
+    })();
+
+    const defaultAvatar = `${storageOrigin}/assets/logos/user-pengguna.png`;
+    const resolveAvatar = (path) => {
+      if (!path) return null;
+      if (/^(https?:)?\/\//i.test(path) || path.startsWith("data:"))
+        return path;
+      return `${storageOrigin}/${path.replace(/^\/+/, "")}`;
+    };
+
+    const avatarSrc = computed(() => {
+      if (avatarUrl.value) return avatarUrl.value;
+      if (!avatarFallbackFailed.value) return defaultAvatar;
+      return null;
+    });
+
+    const onAvatarError = () => {
+      if (avatarUrl.value) {
+        avatarUrl.value = null;
+      } else {
+        avatarFallbackFailed.value = true;
+      }
+    };
 
     const goToProfile = () => {
       router.push("/profile");
@@ -155,7 +183,7 @@ export default {
       loadAbsensi();
       const parseUser = JSON.parse(getUser);
       showuser.value = parseUser.description;
-      avatarUrl.value = parseUser.avatar || null;
+      avatarUrl.value = resolveAvatar(parseUser.avatar);
     });
 
     return {
@@ -179,6 +207,11 @@ export default {
       avatarInitial,
       avatarUrl,
       goToProfile,
+      avatarInitial,
+      avatarUrl,
+      avatarSrc,
+      onAvatarError,
+      goToProfile,
     };
   },
 };
@@ -186,18 +219,34 @@ export default {
 
 <style scoped>
 /* ─── Wrapper ───────────────────────────────────── */
-.home-header {
+/* .home-header {
   width: 100%;
   padding-top: 6%;
   background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
-  /* HAPUS position: sticky, top: 0, z-index */
+} */
+.home-header {
+  width: 100%;
+  padding-top: 6%;
+  background: linear-gradient(
+      135deg,
+      rgba(30, 58, 138, 0.88) 0%,
+      rgba(37, 99, 235, 0.78) 100%
+    ),
+    url("/header_bg.png") center / cover no-repeat;
+  background-color: #1e3a8a;
 }
 
 /* ─── Card ──────────────────────────────────────── */
-.header-card {
+/* .header-card {
   background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
   border-radius: 0 0 28px 28px;
-  padding: 14px 20px 20px; /* kurangi padding-top dari 48px → 14px */
+  padding: 14px 20px 20px;
+  box-shadow: 0 4px 20px rgba(37, 99, 235, 0.35);
+} */
+.header-card {
+  background: transparent; /* gambar & gradient sudah di .home-header */
+  border-radius: 0 0 28px 28px;
+  padding: 14px 20px 20px;
   box-shadow: 0 4px 20px rgba(37, 99, 235, 0.35);
 }
 
@@ -315,9 +364,16 @@ export default {
   object-fit: cover;
 }
 
+.avatar-img.avatar-default {
+  object-fit: cover;
+  padding: 0;
+  transform: scale(1.15);
+}
+
 /* Avatar circle — tambah cursor pointer */
 .avatar-circle {
   cursor: pointer;
+  overflow: hidden;
 }
 
 /* Header card — radius siku */
