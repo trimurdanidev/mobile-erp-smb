@@ -5,7 +5,7 @@
         <!-- Top Wave / Hero -->
         <div class="login-hero">
           <img
-            src="/public/smb_logo_new.png"
+            src="/smb_logo_new.png"
             alt="logo-smb"
             class="hero-logo"
           />
