@@ -95,7 +95,11 @@ export default {
     const avatarFallbackFailed = ref(false);
 
     const storageOrigin = (() => {
-      return new URL(api.defaults.baseURL).origin;
+      const baseURL = api.defaults.baseURL || "";
+      if (/^https?:\/\//i.test(baseURL)) {
+        return new URL(baseURL).origin;
+      }
+      return window.location.origin;
     })();
 
     const defaultAvatar = `${storageOrigin}/assets/logos/user-pengguna.png`;
